@@ -33,7 +33,7 @@ def on_message(ws, message):
             # Format original timestamp
             timestamp_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(timestamp/1000))
 
-            logger.info(
+            logger.debug(
                 "Ping received",
                 current_time=current_time_str,
                 message_timestamp=timestamp_str,

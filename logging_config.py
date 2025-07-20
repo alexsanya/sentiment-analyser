@@ -29,38 +29,41 @@ def setup_logging(environment: str = "development") -> structlog.stdlib.BoundLog
     logging.basicConfig(
         format="%(message)s",
         stream=None,  # We'll handle streams via handlers
-        level=logging.INFO,
+        level=logging.DEBUG
     )
-    
-    # Create file handlers for different log levels
-    handlers = []
+
+    LOG_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+    LOG_BACKUP_COUNT = 5
     
     # Error log handler
     error_handler = logging.handlers.RotatingFileHandler(
         filename=os.path.join(logs_dir, "error.log"),
-        maxBytes=10 * 1024 * 1024,  # 10MB
-        backupCount=5
+        maxBytes=LOG_FILE_SIZE,
+        backupCount=LOG_BACKUP_COUNT
     )
     error_handler.setLevel(logging.ERROR)
-    handlers.append(error_handler)
     
     # Warning log handler
     warning_handler = logging.handlers.RotatingFileHandler(
         filename=os.path.join(logs_dir, "warning.log"),
-        maxBytes=10 * 1024 * 1024,  # 10MB
-        backupCount=5
+        maxBytes=LOG_FILE_SIZE,
+        backupCount=LOG_BACKUP_COUNT
     )
     warning_handler.setLevel(logging.WARNING)
-    handlers.append(warning_handler)
     
     # Info log handler (all levels)
     info_handler = logging.handlers.RotatingFileHandler(
         filename=os.path.join(logs_dir, "app.log"),
-        maxBytes=10 * 1024 * 1024,  # 10MB
-        backupCount=5
+        maxBytes=LOG_FILE_SIZE,
+        backupCount=LOG_BACKUP_COUNT
     )
     info_handler.setLevel(logging.INFO)
-    handlers.append(info_handler)
+
+    handlers = [
+        error_handler,
+        warning_handler,
+        info_handler
+    ]
     
     # Console handler for development
     if environment == "development":
