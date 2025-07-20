@@ -11,16 +11,19 @@ from typing import Any, Dict
 import structlog
 
 
-def setup_logging(environment: str = "development") -> structlog.stdlib.BoundLogger:
+def setup_logging(environment: str = None) -> structlog.stdlib.BoundLogger:
     """
     Configure structured logging with file separation by log level.
     
     Args:
-        environment: "development" or "production"
+        environment: "development" or "production" (auto-detected if None)
         
     Returns:
         Configured structlog logger
     """
+    # Auto-detect environment if not provided
+    if environment is None:
+        environment = os.getenv("ENVIRONMENT", "development")
     # Ensure logs directory exists
     logs_dir = "logs"
     os.makedirs(logs_dir, exist_ok=True)

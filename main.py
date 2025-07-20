@@ -6,8 +6,9 @@ import os
 from dotenv import load_dotenv
 from logging_config import setup_logging, get_logger
 
-# Initialize logger
-logger = None
+# Initialize module-level logger
+setup_logging()  # Auto-detects environment
+logger = get_logger(__name__)
 
 # Message handling callback
 def on_message(ws, message):
@@ -143,12 +144,7 @@ def connect_websocket(url, headers):
 
 # Main function
 def main(x_api_key):
-    global logger
-    
-    # Setup logging
     environment = os.getenv("ENVIRONMENT", "development")
-    logger = setup_logging(environment)
-    
     logger.info("Starting news-powered trading system", environment=environment)
     
     url = "wss://ws.twitterapi.io/twitter/tweet/websocket"
