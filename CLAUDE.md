@@ -79,7 +79,10 @@ tests/
 ├── conftest.py                    # Shared test fixtures
 ├── test_initialization.py         # WebSocketManager initialization tests (4 tests)
 ├── test_signal_handler.py         # Signal handler functionality tests (5 tests)
-└── test_connection_management.py  # Connection management, lifecycle & error tests (23 tests)
+├── test_connection_management.py  # Connection management tests (8 tests)
+├── test_websocket_lifecycle.py    # WebSocket lifecycle management tests (6 tests)
+├── test_error_handling.py         # Comprehensive error handling tests (7 tests)
+└── test_integration.py            # End-to-end integration tests (2 tests)
 
 test_websocket_manager.py          # Main test suite entry point
 conftest.py                        # Root-level fixtures for main runner
@@ -105,12 +108,15 @@ uv run pytest tests/
 uv run pytest tests/test_initialization.py -v
 uv run pytest tests/test_signal_handler.py -v
 uv run pytest tests/test_connection_management.py -v
+uv run pytest tests/test_websocket_lifecycle.py -v
+uv run pytest tests/test_error_handling.py -v
+uv run pytest tests/test_integration.py -v
 
 # Run specific test classes
 uv run pytest tests/test_connection_management.py::TestConnectionManagement -v
-uv run pytest tests/test_connection_management.py::TestWebSocketLifecycle -v
-uv run pytest tests/test_connection_management.py::TestErrorHandling -v
-uv run pytest tests/test_connection_management.py::TestIntegration -v
+uv run pytest tests/test_websocket_lifecycle.py::TestWebSocketLifecycle -v
+uv run pytest tests/test_error_handling.py::TestErrorHandling -v
+uv run pytest tests/test_integration.py::TestIntegration -v
 
 # Run with coverage reporting
 uv run pytest test_websocket_manager.py --cov=websocket_manager --cov-report=term-missing
