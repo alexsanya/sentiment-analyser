@@ -14,6 +14,10 @@ This is a news-powered trading system that monitors Twitter/X feeds in real-time
   - `websocket-client` for real-time Twitter API connections
   - `dotenv` for environment variable management
   - `structlog` for structured logging with JSON output
+- **Testing**: 
+  - `pytest` for unit testing framework
+  - `pytest-mock` for mocking functionality
+  - `pytest-cov` for coverage reporting
 
 ## Development Commands
 
@@ -26,6 +30,19 @@ uv sync
 
 # Add new dependencies
 uv add <package-name>
+
+# Run all tests
+uv run pytest test_websocket_manager.py
+
+# Run tests with coverage
+uv run pytest test_websocket_manager.py --cov=websocket_manager --cov-report=term-missing
+
+# Run specific test categories
+uv run pytest tests/test_initialization.py
+uv run pytest tests/test_signal_handler.py
+
+# Run tests in verbose mode
+uv run pytest tests/ -v
 ```
 
 ## Architecture
@@ -50,6 +67,53 @@ uv add <package-name>
 - **Event Processing**: Real-time tweet data processing with metadata extraction
 - **Structured Logging**: JSON-formatted logs separated by level (error.log, warning.log, app.log)
 - **Time Tracking**: Monitors message latency and processing times
+
+## Testing
+
+The project includes comprehensive unit tests for the WebSocket management functionality:
+
+### Test Structure
+```
+tests/
+├── __init__.py                    # Package initialization
+├── conftest.py                    # Shared test fixtures
+├── test_initialization.py         # WebSocketManager initialization tests (4 tests)
+└── test_signal_handler.py         # Signal handler functionality tests (5 tests)
+
+test_websocket_manager.py          # Main test suite entry point
+conftest.py                        # Root-level fixtures for main runner
+```
+
+### Test Categories
+- **Initialization Tests**: WebSocketManager setup, callback assignment, initial state validation
+- **Signal Handler Tests**: Graceful shutdown, WebSocket closing, error handling, different signal types
+
+### Test Execution Options
+```bash
+# Run all tests (main entry point)
+uv run pytest test_websocket_manager.py
+
+# Run all tests (from tests directory)  
+uv run pytest tests/
+
+# Run individual test modules
+uv run pytest tests/test_initialization.py -v
+uv run pytest tests/test_signal_handler.py -v
+
+# Run with coverage reporting
+uv run pytest test_websocket_manager.py --cov=websocket_manager --cov-report=term-missing
+
+# Run specific test class
+uv run pytest test_websocket_manager.py::TestWebSocketManagerInitialization
+
+# Generate HTML coverage report
+uv run pytest test_websocket_manager.py --cov=websocket_manager --cov-report=html
+```
+
+### Test Coverage
+- **Current Coverage**: 52% of websocket_manager.py (9/9 tests passing)
+- **Tested Components**: WebSocketManager initialization and signal handling
+- **Remaining Coverage**: Connection management, WebSocket lifecycle, error handling, integration scenarios
 
 ## Logging
 
