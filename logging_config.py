@@ -11,6 +11,26 @@ from typing import Any, Dict
 import structlog
 
 
+class StructlogFormatter(structlog.stdlib.ProcessorFormatter):
+    """
+    Custom formatter that uses structlog's JSONRenderer for file output.
+    """
+    def __init__(self):
+        super().__init__(
+            processor=structlog.processors.JSONRenderer(),
+        )
+
+
+class StructlogConsoleFormatter(structlog.stdlib.ProcessorFormatter):
+    """
+    Custom formatter that uses structlog's ConsoleRenderer for console output.
+    """
+    def __init__(self):
+        super().__init__(
+            processor=structlog.dev.ConsoleRenderer(),
+        )
+
+
 def setup_logging(environment: str = None) -> structlog.stdlib.BoundLogger:
     """
     Configure structured logging with file separation by log level.
@@ -38,6 +58,10 @@ def setup_logging(environment: str = None) -> structlog.stdlib.BoundLogger:
     LOG_FILE_SIZE = 10 * 1024 * 1024  # 10MB
     LOG_BACKUP_COUNT = 5
     
+    # Create formatters
+    json_formatter = StructlogFormatter()
+    console_formatter = StructlogConsoleFormatter()
+    
     # Error log handler
     error_handler = logging.handlers.RotatingFileHandler(
         filename=os.path.join(logs_dir, "error.log"),
@@ -45,6 +69,7 @@ def setup_logging(environment: str = None) -> structlog.stdlib.BoundLogger:
         backupCount=LOG_BACKUP_COUNT
     )
     error_handler.setLevel(logging.ERROR)
+    error_handler.setFormatter(json_formatter)
     
     # Warning log handler
     warning_handler = logging.handlers.RotatingFileHandler(
@@ -53,6 +78,7 @@ def setup_logging(environment: str = None) -> structlog.stdlib.BoundLogger:
         backupCount=LOG_BACKUP_COUNT
     )
     warning_handler.setLevel(logging.WARNING)
+    warning_handler.setFormatter(json_formatter)
     
     # Info log handler (all levels)
     info_handler = logging.handlers.RotatingFileHandler(
@@ -61,6 +87,7 @@ def setup_logging(environment: str = None) -> structlog.stdlib.BoundLogger:
         backupCount=LOG_BACKUP_COUNT
     )
     info_handler.setLevel(logging.INFO)
+    info_handler.setFormatter(json_formatter)
 
     handlers = [
         error_handler,
@@ -72,6 +99,7 @@ def setup_logging(environment: str = None) -> structlog.stdlib.BoundLogger:
     if environment == "development":
         console_handler = logging.StreamHandler()
         console_handler.setLevel(logging.INFO)
+        console_handler.setFormatter(console_formatter)
         handlers.append(console_handler)
     
     # Configure root logger
@@ -80,7 +108,7 @@ def setup_logging(environment: str = None) -> structlog.stdlib.BoundLogger:
     for handler in handlers:
         root_logger.addHandler(handler)
     
-    # Configure structlog
+    # Configure structlog processors 
     processors = [
         structlog.stdlib.filter_by_level,
         structlog.stdlib.add_logger_name,
@@ -89,14 +117,10 @@ def setup_logging(environment: str = None) -> structlog.stdlib.BoundLogger:
         structlog.processors.TimeStamper(fmt="ISO"),
         structlog.processors.StackInfoRenderer(),
         structlog.processors.format_exc_info,
+        structlog.processors.dict_tracebacks,
+        # Use ProcessorFormatter to pass data to our custom formatters
+        structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
     ]
-    
-    if environment == "production":
-        # JSON formatter for production
-        processors.append(structlog.processors.JSONRenderer())
-    else:
-        # Pretty formatter for development
-        processors.append(structlog.dev.ConsoleRenderer())
     
     structlog.configure(
         processors=processors,
