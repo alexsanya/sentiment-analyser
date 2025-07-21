@@ -10,6 +10,10 @@ from typing import Any, Dict
 
 import structlog
 
+# Log file configuration constants
+LOG_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+LOG_BACKUP_COUNT = 5
+
 
 class StructlogFormatter(structlog.stdlib.ProcessorFormatter):
     """
@@ -55,8 +59,6 @@ def setup_logging(environment: str = None) -> structlog.stdlib.BoundLogger:
         level=logging.DEBUG
     )
 
-    LOG_FILE_SIZE = 10 * 1024 * 1024  # 10MB
-    LOG_BACKUP_COUNT = 5
     
     # Create formatters
     json_formatter = StructlogFormatter()

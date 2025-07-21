@@ -3,6 +3,7 @@ import traceback
 import websocket
 import json
 import os
+from typing import Dict, Any
 from dotenv import load_dotenv
 from logging_config import setup_logging, get_logger
 
@@ -11,7 +12,7 @@ setup_logging()  # Auto-detects environment
 logger = get_logger(__name__)
 
 # Message handling callback
-def on_message(ws, message):
+def on_message(ws: websocket.WebSocketApp, message: str) -> None:
     try:
         logger.info("Message received", message_preview=message[:100] + "..." if len(message) > 100 else message)
         # Convert to JSON
@@ -78,7 +79,7 @@ def on_message(ws, message):
         logger.error("Error processing message", error=str(e), traceback=traceback.format_exc(), message=message)
 
 # Error handling callback
-def on_error(ws, error):
+def on_error(ws: websocket.WebSocketApp, error: Exception) -> None:
     error_context = {"error": str(error), "traceback": traceback.format_exc()}
     
     if isinstance(error, websocket.WebSocketTimeoutException):
@@ -94,7 +95,7 @@ def on_error(ws, error):
         logger.error("WebSocket error occurred", **error_context)
 
 # Connection close callback
-def on_close(ws, close_status_code, close_msg):
+def on_close(ws: websocket.WebSocketApp, close_status_code: int, close_msg: str) -> None:
     close_reasons = {
         1000: "Normal connection closure",
         1001: "Server is shutting down or client navigating away",
@@ -116,10 +117,10 @@ def on_close(ws, close_status_code, close_msg):
                       status_code=close_status_code, message=close_msg, reason=reason)
 
 # Connection established callback
-def on_open(ws):
+def on_open(ws: websocket.WebSocketApp) -> None:
     logger.info("WebSocket connection opened successfully")
 
-def connect_websocket(url, headers):
+def connect_websocket(url: str, headers: Dict[str, str]) -> None:
     while True:
         try:
             ws = websocket.WebSocketApp(
@@ -143,7 +144,7 @@ def connect_websocket(url, headers):
             continue
 
 # Main function
-def main(x_api_key):
+def main(x_api_key: str) -> None:
     environment = os.getenv("ENVIRONMENT", "development")
     logger.info("Starting news-powered trading system", environment=environment)
     
