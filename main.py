@@ -5,85 +5,15 @@ import json
 import os
 import signal
 from functools import partial
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from dotenv import load_dotenv
 from logging_config import setup_logging, get_logger
+from websocket_manager import WebSocketManager
 
 # Initialize module-level logger
 setup_logging()  # Auto-detects environment
 logger = get_logger(__name__)
 
-
-class WebSocketManager:
-    """Manages WebSocket connection lifecycle and graceful shutdown."""
-    
-    def __init__(self):
-        self.shutdown_requested = False
-        self.current_ws: Optional[websocket.WebSocketApp] = None
-        self.logger = get_logger(self.__class__.__name__)
-    
-    def _signal_handler(self, signum: int, frame) -> None:
-        """Handle SIGINT (Ctrl+C) for graceful shutdown."""
-        self.logger.info("Shutdown signal received", signal=signum)
-        self.shutdown_requested = True
-        
-        # Close current WebSocket connection if active
-        if self.current_ws is not None:
-            self.logger.info("Closing WebSocket connection...")
-            try:
-                self.current_ws.close()
-            except Exception as e:
-                self.logger.error("Error closing WebSocket", error=str(e))
-        
-        self.logger.info("Graceful shutdown initiated")
-    
-    def connect(self, url: str, headers: Dict[str, str]) -> None:
-        """Connect to WebSocket with automatic reconnection logic."""
-        while not self.shutdown_requested:
-            if self.shutdown_requested:
-                self.logger.info("Shutdown requested, exiting connection loop")
-                break
-                
-            try:
-                ws = websocket.WebSocketApp(
-                    url,
-                    header=headers,
-                    on_message=on_message,
-                    on_error=on_error,
-                    on_close=on_close,
-                    on_open=on_open
-                )
-                
-                # Store current WebSocket for signal handler
-                self.current_ws = ws
-                
-                # No automatic reconnect, handle manually
-                ws.run_forever(ping_interval=30, ping_timeout=20)
-                
-            except KeyboardInterrupt:
-                self.logger.info("KeyboardInterrupt received")
-                break
-            except Exception as e:
-                self.logger.error("Connection error", error=str(e), traceback=traceback.format_exc())
-                
-                # Check shutdown flag before retrying
-                if self.shutdown_requested:
-                    self.logger.info("Shutdown requested, not retrying connection")
-                    break
-                    
-                self.logger.info("Retrying connection in 5 seconds")
-                
-                # Sleep with periodic shutdown checks
-                for i in range(5):
-                    if self.shutdown_requested:
-                        break
-                    time.sleep(1)
-                continue
-            finally:
-                # Clear current WebSocket reference
-                self.current_ws = None
-        
-        self.logger.info("WebSocket connection loop ended")
 
 
 # Message handling callback
@@ -198,8 +128,8 @@ def on_open(ws: websocket.WebSocketApp) -> None:
 
 # Main function
 def main(x_api_key: str) -> None:
-    # Create WebSocket manager
-    ws_manager = WebSocketManager()
+    # Create WebSocket manager with callback functions
+    ws_manager = WebSocketManager(on_message, on_error, on_close, on_open)
     
     # Register signal handler for graceful shutdown using the manager
     signal.signal(signal.SIGINT, partial(ws_manager._signal_handler))
