@@ -79,7 +79,7 @@ tests/
 ├── conftest.py                    # Shared test fixtures
 ├── test_initialization.py         # WebSocketManager initialization tests (4 tests)
 ├── test_signal_handler.py         # Signal handler functionality tests (5 tests)
-└── test_connection_management.py  # Connection management & lifecycle tests (14 tests)
+└── test_connection_management.py  # Connection management, lifecycle & error tests (21 tests)
 
 test_websocket_manager.py          # Main test suite entry point
 conftest.py                        # Root-level fixtures for main runner
@@ -90,6 +90,7 @@ conftest.py                        # Root-level fixtures for main runner
 - **Signal Handler Tests**: Graceful shutdown, WebSocket closing, error handling, different signal types
 - **Connection Management Tests**: WebSocket connection lifecycle, retry logic, error handling, shutdown coordination
 - **WebSocket Lifecycle Tests**: WebSocketApp creation, callback assignment, ping parameters, current_ws reference management
+- **Error Handling Tests**: Comprehensive error scenarios, exception types, retry mechanisms, finally block cleanup
 
 ### Test Execution Options
 ```bash
@@ -107,6 +108,7 @@ uv run pytest tests/test_connection_management.py -v
 # Run specific test classes
 uv run pytest tests/test_connection_management.py::TestConnectionManagement -v
 uv run pytest tests/test_connection_management.py::TestWebSocketLifecycle -v
+uv run pytest tests/test_connection_management.py::TestErrorHandling -v
 
 # Run with coverage reporting
 uv run pytest test_websocket_manager.py --cov=websocket_manager --cov-report=term-missing
@@ -119,8 +121,8 @@ uv run pytest test_websocket_manager.py --cov=websocket_manager --cov-report=htm
 ```
 
 ### Test Coverage
-- **Current Coverage**: 92% of websocket_manager.py (23/23 tests passing)
-- **Tested Components**: WebSocketManager initialization, signal handling, connection management, and WebSocket lifecycle
+- **Current Coverage**: 92% of websocket_manager.py (30/30 tests passing)
+- **Tested Components**: WebSocketManager initialization, signal handling, connection management, WebSocket lifecycle, and comprehensive error handling
 - **Connection Management Tests** (8 tests): Connection lifecycle, retry logic, error handling, shutdown coordination
   - Successful WebSocket connection establishment
   - Connection retry logic with 5-second delays  
@@ -137,6 +139,14 @@ uv run pytest test_websocket_manager.py --cov=websocket_manager --cov-report=htm
   - current_ws reference lifecycle during normal connection flow
   - current_ws cleanup on exceptions (finally block execution)
   - WebSocket parameter order, types, and configuration validation
+- **Error Handling Tests** (7 tests): Comprehensive error scenarios, exception recovery, cleanup mechanisms
+  - Connection failure retry mechanism with different error types (ConnectionError, TimeoutError)
+  - Shutdown flag checking during granular retry sleep periods (1-second intervals)
+  - Finally block cleanup across multiple exception scenarios (Exception, KeyboardInterrupt, ConnectionError, RuntimeError)
+  - WebSocket-specific exception handling (WebSocketException, WebSocketConnectionClosedException, OSError, ConnectionRefusedError, ConnectionAbortedError, BrokenPipeError, socket.error, ssl.SSLError)
+  - Error logging during WebSocket close operations in signal handler
+  - Edge case handling when WebSocketApp constructor raises exceptions
+  - Multiple consecutive error recovery cycles with different exception types
 - **Remaining Coverage**: 4% uncovered lines primarily in edge case logging scenarios
 
 ## Logging
