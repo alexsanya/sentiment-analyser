@@ -47,12 +47,45 @@ uv run pytest tests/ -v
 
 ## Architecture
 
-**Single-file application** (`main.py`) with event-driven WebSocket architecture:
+**Modular event-driven WebSocket architecture** with separated concerns:
 
-- **WebSocket Client**: Connects to `wss://ws.twitterapi.io/twitter/tweet/websocket`
-- **Event Handlers**: Processes `connected`, `ping`, and `tweet` events
-- **Error Handling**: Comprehensive error handling with auto-reconnect functionality
-- **Time Analysis**: Calculates timestamp differences for latency monitoring
+- **Main Application** (`main.py`): Application orchestration and WebSocket manager initialization
+- **WebSocket Manager** (`websocket_manager.py`): Connection lifecycle management with auto-reconnect functionality
+- **Event Handlers** (`handlers/` package): Modular message and lifecycle event processing
+- **Structured Logging** (`logging_config.py`): Centralized logging configuration
+
+### Handler Architecture
+
+**Message Handlers** (process WebSocket message content):
+- `handlers/connected.py`: Connection establishment confirmation
+- `handlers/ping.py`: Ping events with timestamp analysis and latency monitoring
+- `handlers/tweet.py`: Tweet events with metadata extraction and processing
+- `handlers/unknown.py`: Unknown/unexpected message types
+
+**Lifecycle Handlers** (manage WebSocket connection events):
+- `handlers/error.py`: Error handling with specialized error type diagnosis and suggestions
+- `handlers/close.py`: Connection closure with status code mapping and logging
+- `handlers/open.py`: Connection establishment events
+
+**Handler Package** (`handlers/__init__.py`): Centralized exports for all handlers
+
+### File Structure
+```
+├── main.py                    # Application entry point and orchestration
+├── websocket_manager.py       # WebSocket connection lifecycle management
+├── logging_config.py          # Structured logging configuration
+├── handlers/                  # Event and message handlers package
+│   ├── __init__.py           # Package exports
+│   ├── connected.py          # Connection establishment handler
+│   ├── ping.py               # Ping message handler with timing analysis
+│   ├── tweet.py              # Tweet message handler with metadata extraction
+│   ├── unknown.py            # Unknown message type handler
+│   ├── error.py              # WebSocket error handler with diagnostics
+│   ├── close.py              # Connection close handler with status mapping
+│   └── open.py               # Connection open handler
+├── tests/                     # Comprehensive test suite
+└── logs/                      # Log files (auto-created)
+```
 
 ## Configuration
 
@@ -63,10 +96,12 @@ uv run pytest tests/ -v
 
 ## Key Components
 
-- **Connection Management**: Automatic reconnection on failures with exponential backoff
-- **Event Processing**: Real-time tweet data processing with metadata extraction
+- **Connection Management** (`websocket_manager.py`): Automatic reconnection on failures with retry logic
+- **Event Processing** (`handlers/` package): Modular real-time message and event processing
+- **Message Analysis** (`handlers/ping.py`, `handlers/tweet.py`): Timestamp analysis and metadata extraction
+- **Error Diagnosis** (`handlers/error.py`): Specialized error handling with diagnostic suggestions
 - **Structured Logging**: JSON-formatted logs separated by level (error.log, warning.log, app.log)
-- **Time Tracking**: Monitors message latency and processing times
+- **Graceful Shutdown**: Signal handling with proper WebSocket connection cleanup
 
 ## Testing
 
@@ -174,8 +209,25 @@ uv run pytest test_websocket_manager.py --cov=websocket_manager --cov-report=htm
 
 ## Development Notes
 
-- The application is designed for continuous operation
-- Environment variables are required for API authentication
-- WebSocket connection handles Twitter's real-time streaming protocol
-- Error recovery includes connection retries and graceful degradation
-- All events and errors are logged with structured data for analysis
+### Application Design
+- **Modular Architecture**: Separated concerns with dedicated handler modules for maintainability
+- **Continuous Operation**: Designed for long-running real-time data streaming
+- **Event-Driven**: WebSocket events are dispatched to appropriate specialized handlers
+- **Graceful Shutdown**: Signal handling ensures proper connection cleanup and resource management
+
+### Handler Development
+- **Message Handlers**: Add new message types by creating handlers in `handlers/` and updating `__init__.py`
+- **Lifecycle Handlers**: WebSocket connection events (open, close, error) are handled by dedicated modules
+- **Consistent Interface**: All handlers follow established patterns for logging and error handling
+- **Individual Testing**: Each handler can be tested independently for specific functionality
+
+### Configuration & Authentication
+- **Environment Variables**: `TWITTERAPI_KEY` required for API authentication
+- **Environment Detection**: `ENVIRONMENT` setting controls logging format (development/production)
+- **Real-time Protocol**: WebSocket connection handles Twitter's streaming API protocol
+- **Error Recovery**: Automatic reconnection with retry logic and graceful degradation
+
+### Monitoring & Observability
+- **Structured Logging**: All events and errors logged with contextual metadata for analysis
+- **Performance Tracking**: Timestamp analysis for latency monitoring and performance insights
+- **Error Diagnostics**: Specialized error handling provides actionable diagnostic suggestions
