@@ -1,0 +1,3 @@
+"""
+WebSocketManager test package.
+"""

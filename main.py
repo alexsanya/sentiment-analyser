@@ -3,13 +3,18 @@ import traceback
 import websocket
 import json
 import os
+import signal
+from functools import partial
 from typing import Dict, Any
 from dotenv import load_dotenv
 from logging_config import setup_logging, get_logger
+from websocket_manager import WebSocketManager
 
 # Initialize module-level logger
 setup_logging()  # Auto-detects environment
 logger = get_logger(__name__)
+
+
 
 # Message handling callback
 def on_message(ws: websocket.WebSocketApp, message: str) -> None:
@@ -120,31 +125,16 @@ def on_close(ws: websocket.WebSocketApp, close_status_code: int, close_msg: str)
 def on_open(ws: websocket.WebSocketApp) -> None:
     logger.info("WebSocket connection opened successfully")
 
-def connect_websocket(url: str, headers: Dict[str, str]) -> None:
-    while True:
-        try:
-            ws = websocket.WebSocketApp(
-                url,
-                header=headers,
-                on_message=on_message,
-                on_error=on_error,
-                on_close=on_close,
-                on_open=on_open
-            )
-            
-            # No automatic reconnect, handle manually
-            ws.run_forever(ping_interval=30, ping_timeout=20)
-            
-        except KeyboardInterrupt:
-            break
-        except Exception as e:
-            logger.error("Connection error", error=str(e), traceback=traceback.format_exc())
-            logger.info("Retrying connection in 5 seconds")
-            time.sleep(5)  # Quick retry for network issues
-            continue
 
 # Main function
 def main(x_api_key: str) -> None:
+    # Create WebSocket manager with callback functions
+    ws_manager = WebSocketManager(on_message, on_error, on_close, on_open)
+    
+    # Register signal handler for graceful shutdown using the manager
+    signal.signal(signal.SIGINT, partial(ws_manager._signal_handler))
+    logger.info("Signal handler registered for graceful shutdown")
+    
     environment = os.getenv("ENVIRONMENT", "development")
     logger.info("Starting news-powered trading system", environment=environment)
     
@@ -152,7 +142,9 @@ def main(x_api_key: str) -> None:
     headers = {"x-api-key": x_api_key}
     
     logger.info("Connecting to Twitter.io WebSocket", url=url)
-    connect_websocket(url, headers)
+    ws_manager.connect(url, headers)
+    
+    logger.info("Application shutting down")
 
 if __name__ == "__main__":
     load_dotenv()
