@@ -16,6 +16,29 @@ class WebSocketManager:
         on_close: Callable[[websocket.WebSocketApp, int, str], None],
         on_open: Callable[[websocket.WebSocketApp], None]
     ):
+        """Initialize WebSocketManager with callback functions.
+        
+        Uses dependency injection pattern to decouple WebSocket management from 
+        specific message handling logic. Callbacks are invoked during WebSocket lifecycle events.
+        
+        Args:
+            on_message: Callback for incoming WebSocket messages. 
+                       Signature: (ws: WebSocketApp, message: str) -> None
+            on_error: Callback for WebSocket errors and exceptions.
+                     Signature: (ws: WebSocketApp, error: Exception) -> None  
+            on_close: Callback for WebSocket connection closure.
+                     Signature: (ws: WebSocketApp, close_code: int, close_msg: str) -> None
+            on_open: Callback for successful WebSocket connection establishment.
+                    Signature: (ws: WebSocketApp) -> None
+        
+        Example:
+            manager = WebSocketManager(
+                on_message=handle_message,
+                on_error=handle_error, 
+                on_close=handle_close,
+                on_open=handle_open
+            )
+        """
         self.shutdown_requested = False
         self.current_ws: Optional[websocket.WebSocketApp] = None
         self.logger = get_logger(self.__class__.__name__)
@@ -25,7 +48,20 @@ class WebSocketManager:
         self.on_open = on_open
     
     def _signal_handler(self, signum: int, frame: types.FrameType) -> None:
-        """Handle SIGINT (Ctrl+C) for graceful shutdown."""
+        """Handle SIGINT (Ctrl+C) for graceful shutdown.
+        
+        Initiates shutdown sequence by setting shutdown flag and closing active WebSocket 
+        connection. Designed to be registered with signal.signal() for graceful termination.
+        
+        Args:
+            signum: Signal number (typically signal.SIGINT = 2 for Ctrl+C)
+            frame: Current stack frame at time of signal (from signal handler)
+            
+        Side Effects:
+            - Sets self.shutdown_requested = True to stop connection loop
+            - Closes self.current_ws if active WebSocket connection exists
+            - Logs shutdown events for monitoring and debugging
+        """
         self.logger.info("Shutdown signal received", signal=signum)
         self.shutdown_requested = True
         
@@ -40,7 +76,28 @@ class WebSocketManager:
         self.logger.info("Graceful shutdown initiated")
     
     def connect(self, url: str, headers: Dict[str, str]) -> None:
-        """Connect to WebSocket with automatic reconnection logic."""
+        """Connect to WebSocket with automatic reconnection logic.
+        
+        Establishes persistent WebSocket connection with automatic retry on failures.
+        Blocks until shutdown is requested via signal handler. Handles connection lifecycle,
+        error recovery, and graceful shutdown coordination.
+        
+        Args:
+            url: WebSocket URL to connect to (e.g., 'wss://example.com/websocket')  
+            headers: HTTP headers for WebSocket handshake (e.g., {'x-api-key': 'key'})
+            
+        Behavior:
+            - Loops until self.shutdown_requested is True
+            - Creates new WebSocketApp instance for each connection attempt
+            - Calls ws.run_forever() with 30s ping interval, 20s ping timeout
+            - On connection failure: waits 5 seconds before retry
+            - On KeyboardInterrupt or Exception: logs error and handles gracefully
+            - Clears WebSocket reference in finally block for proper cleanup
+            
+        Raises:
+            Does not raise exceptions - all errors are logged and handled internally.
+            KeyboardInterrupt is caught and triggers graceful shutdown.
+        """
         while not self.shutdown_requested:
             if self.shutdown_requested:
                 self.logger.info("Shutdown requested, exiting connection loop")
