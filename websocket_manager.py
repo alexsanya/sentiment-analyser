@@ -1,5 +1,6 @@
 import time
 import traceback
+import types
 import websocket
 from typing import Dict, Any, Optional, Callable
 from logging_config import get_logger
@@ -8,7 +9,13 @@ from logging_config import get_logger
 class WebSocketManager:
     """Manages WebSocket connection lifecycle and graceful shutdown."""
     
-    def __init__(self, on_message: Callable, on_error: Callable, on_close: Callable, on_open: Callable):
+    def __init__(
+        self,
+        on_message: Callable[[websocket.WebSocketApp, str], None],
+        on_error: Callable[[websocket.WebSocketApp, Exception], None],
+        on_close: Callable[[websocket.WebSocketApp, int, str], None],
+        on_open: Callable[[websocket.WebSocketApp], None]
+    ):
         self.shutdown_requested = False
         self.current_ws: Optional[websocket.WebSocketApp] = None
         self.logger = get_logger(self.__class__.__name__)
@@ -17,7 +24,7 @@ class WebSocketManager:
         self.on_close = on_close
         self.on_open = on_open
     
-    def _signal_handler(self, signum: int, frame) -> None:
+    def _signal_handler(self, signum: int, frame: types.FrameType) -> None:
         """Handle SIGINT (Ctrl+C) for graceful shutdown."""
         self.logger.info("Shutdown signal received", signal=signum)
         self.shutdown_requested = True
