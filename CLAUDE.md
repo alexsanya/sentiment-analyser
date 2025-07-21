@@ -78,7 +78,8 @@ tests/
 ├── __init__.py                    # Package initialization
 ├── conftest.py                    # Shared test fixtures
 ├── test_initialization.py         # WebSocketManager initialization tests (4 tests)
-└── test_signal_handler.py         # Signal handler functionality tests (5 tests)
+├── test_signal_handler.py         # Signal handler functionality tests (5 tests)
+└── test_connection_management.py  # Connection management tests (8 tests)
 
 test_websocket_manager.py          # Main test suite entry point
 conftest.py                        # Root-level fixtures for main runner
@@ -87,6 +88,7 @@ conftest.py                        # Root-level fixtures for main runner
 ### Test Categories
 - **Initialization Tests**: WebSocketManager setup, callback assignment, initial state validation
 - **Signal Handler Tests**: Graceful shutdown, WebSocket closing, error handling, different signal types
+- **Connection Management Tests**: WebSocket connection lifecycle, retry logic, error handling, shutdown coordination
 
 ### Test Execution Options
 ```bash
@@ -99,6 +101,7 @@ uv run pytest tests/
 # Run individual test modules
 uv run pytest tests/test_initialization.py -v
 uv run pytest tests/test_signal_handler.py -v
+uv run pytest tests/test_connection_management.py -v
 
 # Run with coverage reporting
 uv run pytest test_websocket_manager.py --cov=websocket_manager --cov-report=term-missing
@@ -111,9 +114,18 @@ uv run pytest test_websocket_manager.py --cov=websocket_manager --cov-report=htm
 ```
 
 ### Test Coverage
-- **Current Coverage**: 52% of websocket_manager.py (9/9 tests passing)
-- **Tested Components**: WebSocketManager initialization and signal handling
-- **Remaining Coverage**: Connection management, WebSocket lifecycle, error handling, integration scenarios
+- **Current Coverage**: 92% of websocket_manager.py (17/17 tests passing)
+- **Tested Components**: WebSocketManager initialization, signal handling, and connection management
+- **Connection Management Tests**: 8 comprehensive tests covering:
+  - Successful WebSocket connection establishment
+  - Connection retry logic with 5-second delays  
+  - Graceful shutdown interrupting connection loop
+  - Shutdown flag interrupting retry sleep periods
+  - KeyboardInterrupt handling in connection loop
+  - Exception handling with proper logging and traceback
+  - WebSocket reference management (current_ws lifecycle)
+  - Double shutdown check logic validation
+- **Remaining Coverage**: 4% uncovered lines primarily in edge case logging scenarios
 
 ## Logging
 
