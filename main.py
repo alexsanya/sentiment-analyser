@@ -4,7 +4,8 @@ import websocket
 import json
 import os
 import signal
-from typing import Dict, Any
+from functools import partial
+from typing import Dict, Any, Optional
 from dotenv import load_dotenv
 from logging_config import setup_logging, get_logger
 
@@ -12,27 +13,77 @@ from logging_config import setup_logging, get_logger
 setup_logging()  # Auto-detects environment
 logger = get_logger(__name__)
 
-# Global shutdown flag for graceful shutdown
-shutdown_requested = False
-current_ws: websocket.WebSocketApp = None
 
-
-def signal_handler(signum: int, frame) -> None:
-    """Handle SIGINT (Ctrl+C) for graceful shutdown."""
-    global shutdown_requested, current_ws
+class WebSocketManager:
+    """Manages WebSocket connection lifecycle and graceful shutdown."""
     
-    logger.info("Shutdown signal received", signal=signum)
-    shutdown_requested = True
+    def __init__(self):
+        self.shutdown_requested = False
+        self.current_ws: Optional[websocket.WebSocketApp] = None
+        self.logger = get_logger(self.__class__.__name__)
     
-    # Close current WebSocket connection if active
-    if current_ws is not None:
-        logger.info("Closing WebSocket connection...")
-        try:
-            current_ws.close()
-        except Exception as e:
-            logger.error("Error closing WebSocket", error=str(e))
+    def _signal_handler(self, signum: int, frame) -> None:
+        """Handle SIGINT (Ctrl+C) for graceful shutdown."""
+        self.logger.info("Shutdown signal received", signal=signum)
+        self.shutdown_requested = True
+        
+        # Close current WebSocket connection if active
+        if self.current_ws is not None:
+            self.logger.info("Closing WebSocket connection...")
+            try:
+                self.current_ws.close()
+            except Exception as e:
+                self.logger.error("Error closing WebSocket", error=str(e))
+        
+        self.logger.info("Graceful shutdown initiated")
     
-    logger.info("Graceful shutdown initiated")
+    def connect(self, url: str, headers: Dict[str, str]) -> None:
+        """Connect to WebSocket with automatic reconnection logic."""
+        while not self.shutdown_requested:
+            if self.shutdown_requested:
+                self.logger.info("Shutdown requested, exiting connection loop")
+                break
+                
+            try:
+                ws = websocket.WebSocketApp(
+                    url,
+                    header=headers,
+                    on_message=on_message,
+                    on_error=on_error,
+                    on_close=on_close,
+                    on_open=on_open
+                )
+                
+                # Store current WebSocket for signal handler
+                self.current_ws = ws
+                
+                # No automatic reconnect, handle manually
+                ws.run_forever(ping_interval=30, ping_timeout=20)
+                
+            except KeyboardInterrupt:
+                self.logger.info("KeyboardInterrupt received")
+                break
+            except Exception as e:
+                self.logger.error("Connection error", error=str(e), traceback=traceback.format_exc())
+                
+                # Check shutdown flag before retrying
+                if self.shutdown_requested:
+                    self.logger.info("Shutdown requested, not retrying connection")
+                    break
+                    
+                self.logger.info("Retrying connection in 5 seconds")
+                
+                # Sleep with periodic shutdown checks
+                for i in range(5):
+                    if self.shutdown_requested:
+                        break
+                    time.sleep(1)
+                continue
+            finally:
+                # Clear current WebSocket reference
+                self.current_ws = None
+        
+        self.logger.info("WebSocket connection loop ended")
 
 
 # Message handling callback
@@ -144,59 +195,14 @@ def on_close(ws: websocket.WebSocketApp, close_status_code: int, close_msg: str)
 def on_open(ws: websocket.WebSocketApp) -> None:
     logger.info("WebSocket connection opened successfully")
 
-def connect_websocket(url: str, headers: Dict[str, str]) -> None:
-    global shutdown_requested, current_ws
-    
-    while not shutdown_requested:
-        if shutdown_requested:
-            logger.info("Shutdown requested, exiting connection loop")
-            break
-            
-        try:
-            ws = websocket.WebSocketApp(
-                url,
-                header=headers,
-                on_message=on_message,
-                on_error=on_error,
-                on_close=on_close,
-                on_open=on_open
-            )
-            
-            # Store current WebSocket for signal handler
-            current_ws = ws
-            
-            # No automatic reconnect, handle manually
-            ws.run_forever(ping_interval=30, ping_timeout=20)
-            
-        except KeyboardInterrupt:
-            logger.info("KeyboardInterrupt received")
-            break
-        except Exception as e:
-            logger.error("Connection error", error=str(e), traceback=traceback.format_exc())
-            
-            # Check shutdown flag before retrying
-            if shutdown_requested:
-                logger.info("Shutdown requested, not retrying connection")
-                break
-                
-            logger.info("Retrying connection in 5 seconds")
-            
-            # Sleep with periodic shutdown checks
-            for i in range(5):
-                if shutdown_requested:
-                    break
-                time.sleep(1)
-            continue
-        finally:
-            # Clear current WebSocket reference
-            current_ws = None
-    
-    logger.info("WebSocket connection loop ended")
 
 # Main function
 def main(x_api_key: str) -> None:
-    # Register signal handler for graceful shutdown
-    signal.signal(signal.SIGINT, signal_handler)
+    # Create WebSocket manager
+    ws_manager = WebSocketManager()
+    
+    # Register signal handler for graceful shutdown using the manager
+    signal.signal(signal.SIGINT, partial(ws_manager._signal_handler))
     logger.info("Signal handler registered for graceful shutdown")
     
     environment = os.getenv("ENVIRONMENT", "development")
@@ -206,7 +212,7 @@ def main(x_api_key: str) -> None:
     headers = {"x-api-key": x_api_key}
     
     logger.info("Connecting to Twitter.io WebSocket", url=url)
-    connect_websocket(url, headers)
+    ws_manager.connect(url, headers)
     
     logger.info("Application shutting down")
 
