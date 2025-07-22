@@ -7,6 +7,7 @@ from functools import partial
 from dotenv import load_dotenv
 from logging_config import setup_logging, get_logger
 from websocket_manager import WebSocketManager
+from mq_messenger import MQMessenger
 from handlers import (
     handle_connected_event,
     handle_ping_event,
@@ -20,6 +21,9 @@ from handlers import (
 # Initialize module-level logger
 setup_logging()  # Auto-detects environment
 logger = get_logger(__name__)
+
+# Global MQMessenger instance
+mq_messenger: MQMessenger = None
 
 
 
@@ -39,7 +43,7 @@ def on_message(ws: websocket.WebSocketApp, message: str) -> None:
         elif event_type == "ping":
             handle_ping_event(result_json)
         elif event_type == "tweet":
-            handle_tweet_event(result_json)
+            handle_tweet_event(result_json, mq_messenger)
         else:
             handle_unknown_event(event_type, result_json)
         
@@ -52,15 +56,42 @@ def on_message(ws: websocket.WebSocketApp, message: str) -> None:
 
 # Main function
 def main(x_api_key: str) -> None:
+    global mq_messenger
+    
+    environment = os.getenv("ENVIRONMENT", "development")
+    logger.info("Starting news-powered trading system", environment=environment)
+    
+    # Initialize and test RabbitMQ connection at startup
+    try:
+        logger.info("Initializing RabbitMQ connection...")
+        mq_messenger = MQMessenger.from_env(connect_on_init=True)
+        
+        # Test the connection
+        if not mq_messenger.test_connection():
+            logger.error("RabbitMQ connection test failed - shutting down")
+            raise Exception("RabbitMQ connection validation failed")
+        
+        logger.info("RabbitMQ connection validated successfully")
+        
+    except Exception as e:
+        logger.error(
+            "Failed to establish RabbitMQ connection at startup",
+            error=str(e)
+        )
+        raise SystemExit(1)
+    
     # Create WebSocket manager with callback functions
     ws_manager = WebSocketManager(on_message, on_error, on_close, on_open)
     
     # Register signal handler for graceful shutdown using the manager
-    signal.signal(signal.SIGINT, partial(ws_manager._signal_handler))
-    logger.info("Signal handler registered for graceful shutdown")
+    def shutdown_handler(signum, frame):
+        logger.info("Shutdown signal received, cleaning up...")
+        ws_manager._signal_handler(signum, frame)
+        if mq_messenger:
+            mq_messenger.close()
     
-    environment = os.getenv("ENVIRONMENT", "development")
-    logger.info("Starting news-powered trading system", environment=environment)
+    signal.signal(signal.SIGINT, shutdown_handler)
+    logger.info("Signal handler registered for graceful shutdown")
     
     url = "wss://ws.twitterapi.io/twitter/tweet/websocket"
     headers = {"x-api-key": x_api_key}
@@ -69,6 +100,8 @@ def main(x_api_key: str) -> None:
     ws_manager.connect(url, headers)
     
     logger.info("Application shutting down")
+    if mq_messenger:
+        mq_messenger.close()
 
 if __name__ == "__main__":
     load_dotenv()

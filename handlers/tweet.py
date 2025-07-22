@@ -7,12 +7,14 @@ from mq_messenger import MQMessenger
 
 logger = get_logger(__name__)
 
-# Initialize MQ messenger from environment variables
-mq_messenger = MQMessenger.from_env()
 
-
-def handle_tweet_event(result_json: Dict[str, Any]) -> None:
-    """Handle 'tweet' event type with metadata extraction."""
+def handle_tweet_event(result_json: Dict[str, Any], mq_messenger: MQMessenger) -> None:
+    """Handle 'tweet' event type with metadata extraction.
+    
+    Args:
+        result_json: Tweet event data from WebSocket
+        mq_messenger: Pre-initialized MQMessenger instance
+    """
     # Extract fields
     rule_id = result_json.get("rule_id")
     rule_tag = result_json.get("rule_tag")

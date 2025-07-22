@@ -20,7 +20,8 @@ class MQMessenger:
         port: int = 5672,
         queue_name: str = "tweet_events",
         username: Optional[str] = None,
-        password: Optional[str] = None
+        password: Optional[str] = None,
+        connect_on_init: bool = False
     ) -> None:
         """Initialize MQMessenger with connection parameters.
         
@@ -30,6 +31,7 @@ class MQMessenger:
             queue_name: Name of the queue to publish to
             username: Optional username for authentication
             password: Optional password for authentication
+            connect_on_init: If True, establish connection immediately
         """
         self.host = host
         self.port = port
@@ -46,16 +48,20 @@ class MQMessenger:
             queue_name=self.queue_name,
             authenticated=bool(self.username)
         )
+        
+        if connect_on_init:
+            self.connect()
     
     @classmethod
-    def from_env(cls) -> "MQMessenger":
+    def from_env(cls, connect_on_init: bool = False) -> "MQMessenger":
         """Create MQMessenger instance from environment variables."""
         return cls(
             host=os.getenv("RABBITMQ_HOST", "localhost"),
             port=int(os.getenv("RABBITMQ_PORT", "5672")),
             queue_name=os.getenv("RABBITMQ_QUEUE", "tweet_events"),
             username=os.getenv("RABBITMQ_USERNAME"),
-            password=os.getenv("RABBITMQ_PASSWORD")
+            password=os.getenv("RABBITMQ_PASSWORD"),
+            connect_on_init=connect_on_init
         )
     
     def _create_connection(self) -> None:
@@ -105,6 +111,42 @@ class MQMessenger:
         
         self._channel = None
         self._connection = None
+    
+    def connect(self) -> None:
+        """Establish connection to RabbitMQ server.
+        
+        Raises:
+            Exception: If connection cannot be established
+        """
+        if not self.is_connected():
+            self._create_connection()
+            logger.info("RabbitMQ connection established at startup")
+    
+    def test_connection(self) -> bool:
+        """Test RabbitMQ connection and return success status.
+        
+        Returns:
+            bool: True if connection is successful, False otherwise
+        """
+        try:
+            if not self.is_connected():
+                self._create_connection()
+            
+            # Test publish a small message to validate connection
+            test_message = {"_test": "connection_validation"}
+            self._channel.basic_publish(
+                exchange='',
+                routing_key=self.queue_name,
+                body=json.dumps(test_message),
+                properties=pika.BasicProperties(delivery_mode=2)
+            )
+            
+            logger.info("RabbitMQ connection test successful")
+            return True
+            
+        except Exception as e:
+            logger.error("RabbitMQ connection test failed", error=str(e))
+            return False
     
     def _ensure_connection(self) -> None:
         """Ensure connection is active, create if needed."""

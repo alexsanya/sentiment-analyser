@@ -32,6 +32,20 @@ class TestMQMessengerInitialization:
         assert messenger.username == "test_user"
         assert messenger.password == "test_pass"
     
+    @patch("pika.BlockingConnection")
+    def test_init_with_connect_on_init(self, mock_connection):
+        mock_conn = Mock()
+        mock_channel = Mock()
+        mock_conn.channel.return_value = mock_channel
+        mock_connection.return_value = mock_conn
+        
+        messenger = MQMessenger(connect_on_init=True)
+        
+        mock_connection.assert_called_once()
+        mock_channel.queue_declare.assert_called_once_with(queue="tweet_events", durable=True)
+        assert messenger._connection == mock_conn
+        assert messenger._channel == mock_channel
+    
     @patch.dict("os.environ", {
         "RABBITMQ_HOST": "env.rabbitmq.com",
         "RABBITMQ_PORT": "5674",
@@ -55,6 +69,20 @@ class TestMQMessengerInitialization:
         assert messenger.queue_name == "tweet_events"
         assert messenger.username is None
         assert messenger.password is None
+    
+    @patch("pika.BlockingConnection")
+    @patch.dict("os.environ", {"RABBITMQ_HOST": "test.host"})
+    def test_from_env_with_connect_on_init(self, mock_connection):
+        mock_conn = Mock()
+        mock_channel = Mock()
+        mock_conn.channel.return_value = mock_channel
+        mock_connection.return_value = mock_conn
+        
+        messenger = MQMessenger.from_env(connect_on_init=True)
+        
+        assert messenger.host == "test.host"
+        mock_connection.assert_called_once()
+        mock_channel.queue_declare.assert_called_once()
 
 
 class TestMQMessengerConnection:
@@ -246,3 +274,51 @@ class TestMQMessengerContextManager:
         with patch.object(messenger, '_cleanup_connection') as mock_cleanup:
             messenger.close()
             mock_cleanup.assert_called_once()
+
+
+class TestMQMessengerConnectionMethods:
+    """Test new connection methods."""
+    
+    @patch("pika.BlockingConnection")
+    def test_connect_method(self, mock_connection):
+        mock_conn = Mock()
+        mock_channel = Mock()
+        mock_conn.channel.return_value = mock_channel
+        mock_conn.is_closed = False
+        mock_channel.is_closed = False
+        mock_connection.return_value = mock_conn
+        
+        messenger = MQMessenger()
+        messenger.connect()
+        
+        mock_connection.assert_called_once()
+        mock_channel.queue_declare.assert_called_once_with(queue="tweet_events", durable=True)
+        assert messenger._connection == mock_conn
+        assert messenger._channel == mock_channel
+    
+    @patch("pika.BlockingConnection")
+    def test_test_connection_success(self, mock_connection):
+        mock_conn = Mock()
+        mock_channel = Mock()
+        mock_conn.channel.return_value = mock_channel
+        mock_conn.is_closed = False
+        mock_channel.is_closed = False
+        mock_connection.return_value = mock_conn
+        
+        messenger = MQMessenger()
+        result = messenger.test_connection()
+        
+        assert result is True
+        mock_channel.basic_publish.assert_called_once()
+        call_args = mock_channel.basic_publish.call_args
+        assert call_args[1]["routing_key"] == "tweet_events"
+        assert '"_test": "connection_validation"' in call_args[1]["body"]
+    
+    @patch("pika.BlockingConnection")
+    def test_test_connection_failure(self, mock_connection):
+        mock_connection.side_effect = Exception("Connection failed")
+        
+        messenger = MQMessenger()
+        result = messenger.test_connection()
+        
+        assert result is False
