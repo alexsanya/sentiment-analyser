@@ -4,6 +4,7 @@ import json
 import os
 import signal
 from functools import partial
+from typing import Optional, Any
 from dotenv import load_dotenv
 from logging_config import setup_logging, get_logger
 from websocket_manager import WebSocketManager
@@ -23,7 +24,7 @@ setup_logging()  # Auto-detects environment
 logger = get_logger(__name__)
 
 # Global MQMessenger instance
-mq_messenger: MQMessenger = None
+mq_messenger: Optional[MQMessenger] = None
 
 
 def initialize_rabbitmq() -> MQMessenger:
@@ -72,7 +73,10 @@ def on_message(ws: websocket.WebSocketApp, message: str) -> None:
         elif event_type == "ping":
             handle_ping_event(result_json)
         elif event_type == "tweet":
-            handle_tweet_event(result_json, mq_messenger)
+            if mq_messenger is not None:
+                handle_tweet_event(result_json, mq_messenger)
+            else:
+                logger.error("Cannot handle tweet event: MQ messenger not initialized")
         else:
             handle_unknown_event(event_type, result_json)
         
@@ -97,7 +101,7 @@ def main(x_api_key: str) -> None:
     ws_manager = WebSocketManager(on_message, on_error, on_close, on_open)
     
     # Register signal handler for graceful shutdown using the manager
-    def shutdown_handler(signum, frame):
+    def shutdown_handler(signum: int, frame: Any) -> None:
         logger.info("Shutdown signal received, cleaning up...")
         ws_manager._signal_handler(signum, frame)
         if mq_messenger:

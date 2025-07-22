@@ -164,12 +164,31 @@ class MQMessenger:
             
         Returns:
             bool: True if message was published successfully, False otherwise
+            
+        Raises:
+            ValueError: If message is invalid or too large
         """
+        # Input validation
+        if not isinstance(message, dict):
+            raise ValueError("Message must be a dictionary")
+        
+        if not message:
+            raise ValueError("Message cannot be empty")
+        
+        # Pre-validate message size by serializing to JSON
+        try:
+            json_message = json.dumps(message, default=str)
+        except (TypeError, ValueError) as e:
+            raise ValueError(f"Message cannot be serialized to JSON: {str(e)}")
+        
+        # Check message size (RabbitMQ default max is 128MB, we'll limit to 1MB for safety)
+        max_message_size = 1024 * 1024  # 1MB
+        message_size = len(json_message.encode('utf-8'))
+        if message_size > max_message_size:
+            raise ValueError(f"Message too large: {message_size} bytes exceeds {max_message_size} bytes")
+        
         try:
             self._ensure_connection()
-            
-            # Serialize message to JSON
-            json_message = json.dumps(message, default=str)
             
             # Publish message with persistence
             self._channel.basic_publish(
@@ -193,7 +212,7 @@ class MQMessenger:
                 "Failed to publish message to RabbitMQ",
                 error=str(e),
                 queue_name=self.queue_name,
-                message_preview=str(message)[:100] + "..." if len(str(message)) > 100 else str(message)
+                message_size=len(str(message))
             )
             return False
     

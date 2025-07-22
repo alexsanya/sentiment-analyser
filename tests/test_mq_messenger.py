@@ -258,6 +258,45 @@ class TestMQMessengerPublish:
         messenger._channel = mock_channel
         
         assert messenger.is_connected() is False
+    
+    def test_publish_validation_invalid_type(self):
+        """Test publish raises ValueError for non-dict message."""
+        messenger = MQMessenger()
+        
+        with pytest.raises(ValueError, match="Message must be a dictionary"):
+            messenger.publish("not a dict")
+        
+        with pytest.raises(ValueError, match="Message must be a dictionary"):
+            messenger.publish(123)
+        
+        with pytest.raises(ValueError, match="Message must be a dictionary"):
+            messenger.publish(None)
+    
+    def test_publish_validation_empty_message(self):
+        """Test publish raises ValueError for empty message."""
+        messenger = MQMessenger()
+        
+        with pytest.raises(ValueError, match="Message cannot be empty"):
+            messenger.publish({})
+    
+    @patch("pika.BlockingConnection")
+    def test_publish_validation_message_too_large(self, mock_connection):
+        """Test publish raises ValueError for message exceeding size limit."""
+        mock_conn = Mock()
+        mock_channel = Mock()
+        mock_conn.channel.return_value = mock_channel
+        mock_conn.is_closed = False
+        mock_channel.is_closed = False
+        mock_connection.return_value = mock_conn
+        
+        messenger = MQMessenger()
+        
+        # Create a message that's too large (> 1MB)
+        large_data = "x" * (1024 * 1024 + 1)  # Just over 1MB
+        large_message = {"data": large_data}
+        
+        with pytest.raises(ValueError, match="Message too large"):
+            messenger.publish(large_message)
 
 
 class TestMQMessengerContextManager:

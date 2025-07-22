@@ -11,8 +11,8 @@ services:
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq  # Persistent storage
     environment:
-      RABBITMQ_DEFAULT_USER: admin      # Default username
-      RABBITMQ_DEFAULT_PASS: password   # Default password
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME:-admin}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-changeme}
     healthcheck:
       test: rabbitmq-diagnostics check_port_connectivity
       interval: 10s
