@@ -1,9 +1,24 @@
+import json
 import time
 import traceback
 import types
 import websocket
 from typing import Dict, Any, Optional, Callable
 from logging_config import get_logger
+
+# Conditional import to avoid circular dependency
+try:
+    from mq_messenger import MQMessenger
+except ImportError:
+    MQMessenger = None
+
+# Import message handlers
+from handlers import (
+    handle_connected_event,
+    handle_ping_event,
+    handle_tweet_event,
+    handle_unknown_event
+)
 
 
 class WebSocketManager:
@@ -14,7 +29,8 @@ class WebSocketManager:
         on_message: Callable[[websocket.WebSocketApp, str], None],
         on_error: Callable[[websocket.WebSocketApp, Exception], None],
         on_close: Callable[[websocket.WebSocketApp, int, str], None],
-        on_open: Callable[[websocket.WebSocketApp], None]
+        on_open: Callable[[websocket.WebSocketApp], None],
+        mq_messenger: Optional['MQMessenger'] = None
     ):
         """Initialize WebSocketManager with callback functions.
         
@@ -30,13 +46,16 @@ class WebSocketManager:
                      Signature: (ws: WebSocketApp, close_code: int, close_msg: str) -> None
             on_open: Callback for successful WebSocket connection establishment.
                     Signature: (ws: WebSocketApp) -> None
+            mq_messenger: Optional MQMessenger instance for message publishing.
+                         If provided, enables automatic message publishing for tweet events.
         
         Example:
             manager = WebSocketManager(
                 on_message=handle_message,
                 on_error=handle_error, 
                 on_close=handle_close,
-                on_open=handle_open
+                on_open=handle_open,
+                mq_messenger=messenger
             )
         """
         self.shutdown_requested = False
@@ -46,6 +65,33 @@ class WebSocketManager:
         self.on_error = on_error
         self.on_close = on_close
         self.on_open = on_open
+        self.mq_messenger = mq_messenger
+    
+    def _on_message(self, ws: websocket.WebSocketApp, message: str) -> None:
+        """Main message dispatcher that routes to appropriate handlers based on event type."""
+        try:
+            self.logger.info("Message received", message_preview=message[:100] + "..." if len(message) > 100 else message)
+            # Convert to JSON
+            result_json = json.loads(message)
+            event_type = result_json.get("event_type")
+            
+            # Route to appropriate handler based on event type
+            if event_type == "connected":
+                handle_connected_event(result_json)
+            elif event_type == "ping":
+                handle_ping_event(result_json)
+            elif event_type == "tweet":
+                if self.mq_messenger is not None:
+                    handle_tweet_event(result_json, self.mq_messenger)
+                else:
+                    self.logger.error("Cannot handle tweet event: MQ messenger not initialized")
+            else:
+                handle_unknown_event(event_type, result_json)
+            
+        except json.JSONDecodeError as e:
+            self.logger.error("JSON parsing error", error=str(e), traceback=traceback.format_exc(), message=message)
+        except Exception as e:
+            self.logger.error("Error processing message", error=str(e), traceback=traceback.format_exc(), message=message)
     
     def _signal_handler(self, signum: int, frame: types.FrameType) -> None:
         """Handle SIGINT (Ctrl+C) for graceful shutdown.
@@ -107,7 +153,7 @@ class WebSocketManager:
                 ws = websocket.WebSocketApp(
                     url,
                     header=headers,
-                    on_message=self.on_message,
+                    on_message=self.on_message if self.on_message is not None else self._on_message,
                     on_error=self.on_error,
                     on_close=self.on_close,
                     on_open=self.on_open
