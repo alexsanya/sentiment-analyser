@@ -47,10 +47,11 @@ uv run pytest tests/ -v
 
 ## Architecture
 
-**Modular event-driven WebSocket architecture** with separated concerns:
+**Modular event-driven WebSocket architecture** with dependency injection pattern:
 
-- **Main Application** (`main.py`): Application orchestration and WebSocket manager initialization
-- **WebSocket Manager** (`websocket_manager.py`): Connection lifecycle management with auto-reconnect functionality
+- **Main Application** (`main.py`): Application orchestration and dependency injection coordination
+- **WebSocket Manager** (`websocket_manager.py`): Connection lifecycle management with integrated message processing and MQMessenger dependency injection
+- **MQ Messenger** (`mq_messenger.py`): RabbitMQ message publishing service injected into WebSocket manager
 - **Event Handlers** (`handlers/` package): Modular message and lifecycle event processing
 - **Structured Logging** (`logging_config.py`): Centralized logging configuration
 
@@ -71,8 +72,9 @@ uv run pytest tests/ -v
 
 ### File Structure
 ```
-├── main.py                    # Application entry point and orchestration
-├── websocket_manager.py       # WebSocket connection lifecycle management
+├── main.py                    # Application entry point with dependency injection
+├── websocket_manager.py       # WebSocket lifecycle management with integrated message handling
+├── mq_messenger.py            # RabbitMQ message publishing service
 ├── logging_config.py          # Structured logging configuration
 ├── handlers/                  # Event and message handlers package
 │   ├── __init__.py           # Package exports
@@ -96,12 +98,14 @@ uv run pytest tests/ -v
 
 ## Key Components
 
-- **Connection Management** (`websocket_manager.py`): Automatic reconnection on failures with retry logic
+- **Connection Management** (`websocket_manager.py`): Automatic reconnection on failures with retry logic and integrated message handling
+- **Dependency Injection** (`main.py`): MQMessenger instances injected into WebSocketManager for clean separation of concerns
+- **Message Publishing** (`mq_messenger.py`): RabbitMQ service with connection management and message validation
 - **Event Processing** (`handlers/` package): Modular real-time message and event processing
 - **Message Analysis** (`handlers/ping.py`, `handlers/tweet.py`): Timestamp analysis and metadata extraction
 - **Error Diagnosis** (`handlers/error.py`): Specialized error handling with diagnostic suggestions
 - **Structured Logging**: JSON-formatted logs separated by level (error.log, warning.log, app.log)
-- **Graceful Shutdown**: Signal handling with proper WebSocket connection cleanup
+- **Graceful Shutdown**: Signal handling with proper WebSocket and MQ connection cleanup
 
 ## Testing
 
@@ -164,8 +168,8 @@ uv run pytest test_websocket_manager.py --cov=websocket_manager --cov-report=htm
 ```
 
 ### Test Coverage
-- **Current Coverage**: 92% of websocket_manager.py (32/32 tests passing)
-- **Tested Components**: WebSocketManager initialization, signal handling, connection management, WebSocket lifecycle, comprehensive error handling, and integration workflows
+- **Current Coverage**: 92% of websocket_manager.py (70/70 tests passing across all components)
+- **Tested Components**: WebSocketManager initialization, signal handling, connection management, WebSocket lifecycle, comprehensive error handling, integration workflows, MQMessenger functionality, and tweet handler operations
 - **Connection Management Tests** (8 tests): Connection lifecycle, retry logic, error handling, shutdown coordination
   - Successful WebSocket connection establishment
   - Connection retry logic with 5-second delays  
@@ -210,14 +214,24 @@ uv run pytest test_websocket_manager.py --cov=websocket_manager --cov-report=htm
 ## Development Notes
 
 ### Application Design
+- **Dependency Injection Architecture**: Clean separation of concerns using dependency injection pattern instead of global state
 - **Modular Architecture**: Separated concerns with dedicated handler modules for maintainability
 - **Continuous Operation**: Designed for long-running real-time data streaming
 - **Event-Driven**: WebSocket events are dispatched to appropriate specialized handlers
+- **Integrated Message Processing**: WebSocketManager includes built-in message handling with MQMessenger integration
 - **Graceful Shutdown**: Signal handling ensures proper connection cleanup and resource management
+
+### Dependency Injection Pattern
+- **No Global State**: Eliminated global `mq_messenger` variable for better testability and thread safety
+- **Constructor Injection**: MQMessenger instances passed to WebSocketManager constructor
+- **Local Scope Management**: Dependencies managed in function scope with proper lifecycle handling
+- **Backward Compatibility**: WebSocketManager maintains compatibility with external callback patterns
+- **Clean Architecture**: Follows SOLID principles with clear separation of concerns
 
 ### Handler Development
 - **Message Handlers**: Add new message types by creating handlers in `handlers/` and updating `__init__.py`
 - **Lifecycle Handlers**: WebSocket connection events (open, close, error) are handled by dedicated modules
+- **Integrated Processing**: WebSocketManager includes internal `_on_message` method for seamless MQ integration
 - **Consistent Interface**: All handlers follow established patterns for logging and error handling
 - **Individual Testing**: Each handler can be tested independently for specific functionality
 
