@@ -26,6 +26,35 @@ logger = get_logger(__name__)
 mq_messenger: MQMessenger = None
 
 
+def initialize_rabbitmq() -> MQMessenger:
+    """Initialize and test RabbitMQ connection at startup.
+    
+    Returns:
+        MQMessenger: Successfully connected and validated MQMessenger instance
+        
+    Raises:
+        SystemExit: If RabbitMQ connection cannot be established or validated
+    """
+    try:
+        logger.info("Initializing RabbitMQ connection...")
+        messenger = MQMessenger.from_env(connect_on_init=True)
+        
+        # Test the connection
+        if not messenger.test_connection():
+            logger.error("RabbitMQ connection test failed - shutting down")
+            raise Exception("RabbitMQ connection validation failed")
+        
+        logger.info("RabbitMQ connection validated successfully")
+        return messenger
+        
+    except Exception as e:
+        logger.error(
+            "Failed to establish RabbitMQ connection at startup",
+            error=str(e)
+        )
+        raise SystemExit(1)
+
+
 
 
 # Message handling callback
@@ -62,23 +91,7 @@ def main(x_api_key: str) -> None:
     logger.info("Starting news-powered trading system", environment=environment)
     
     # Initialize and test RabbitMQ connection at startup
-    try:
-        logger.info("Initializing RabbitMQ connection...")
-        mq_messenger = MQMessenger.from_env(connect_on_init=True)
-        
-        # Test the connection
-        if not mq_messenger.test_connection():
-            logger.error("RabbitMQ connection test failed - shutting down")
-            raise Exception("RabbitMQ connection validation failed")
-        
-        logger.info("RabbitMQ connection validated successfully")
-        
-    except Exception as e:
-        logger.error(
-            "Failed to establish RabbitMQ connection at startup",
-            error=str(e)
-        )
-        raise SystemExit(1)
+    mq_messenger = initialize_rabbitmq()
     
     # Create WebSocket manager with callback functions
     ws_manager = WebSocketManager(on_message, on_error, on_close, on_open)
