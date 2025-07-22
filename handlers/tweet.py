@@ -3,8 +3,12 @@
 import time
 from typing import Dict, Any
 from logging_config import get_logger
+from mq_messenger import MQMessenger
 
 logger = get_logger(__name__)
+
+# Initialize MQ messenger from environment variables
+mq_messenger = MQMessenger.from_env()
 
 
 def handle_tweet_event(result_json: Dict[str, Any]) -> None:
@@ -36,3 +40,32 @@ def handle_tweet_event(result_json: Dict[str, Any]) -> None:
         time_difference_formatted=diff_time_formatted,
         time_difference_ms=diff_time_ms
     )
+    
+    # Publish tweet event to RabbitMQ
+    try:
+        # Create message payload with all extracted data
+        mq_payload = {
+            "event_type": event_type,
+            "rule_id": rule_id,
+            "rule_tag": rule_tag,
+            "tweet_count": len(tweets),
+            "tweets": tweets,
+            "timestamp": timestamp,
+            "processing_timestamp": current_time_ms,
+            "time_difference_ms": diff_time_ms,
+            "time_difference_formatted": diff_time_formatted
+        }
+        
+        success = mq_messenger.publish(mq_payload)
+        if success:
+            logger.info("Tweet event published to RabbitMQ", rule_id=rule_id, tweet_count=len(tweets))
+        else:
+            logger.warning("Failed to publish tweet event to RabbitMQ", rule_id=rule_id)
+            
+    except Exception as e:
+        logger.error(
+            "Error publishing tweet event to RabbitMQ",
+            error=str(e),
+            rule_id=rule_id,
+            tweet_count=len(tweets)
+        )

@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  rabbitmq:
+    image: rabbitmq:3.13-management  # Includes management plugin
+    container_name: rabbitmq
+    hostname: rabbitmq
+    ports:
+      - "5672:5672"   # AMQP (for Python clients)
+      - "15672:15672" # Management UI (HTTP)
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq  # Persistent storage
+    environment:
+      RABBITMQ_DEFAULT_USER: admin      # Default username
+      RABBITMQ_DEFAULT_PASS: password   # Default password
+    healthcheck:
+      test: rabbitmq-diagnostics check_port_connectivity
+      interval: 10s
+
+volumes:
+  rabbitmq_data:  # Named volume for persistence
