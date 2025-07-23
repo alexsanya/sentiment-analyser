@@ -1,0 +1,188 @@
+{
+  "tweets": [
+    {
+      "type": "tweet",
+      "id": "1946705136438431748",
+      "url": "https://x.com/alexsanyakoval/status/1946705136438431748",
+      "twitterUrl": "https://twitter.com/alexsanyakoval/status/1946705136438431748",
+      "text": "My Rules of engagement\nReed more in my post: https://t.co/tKo1tfckav https://t.co/Khhm0sufWd",
+      "source": "Twitter for iPhone",
+      "retweetCount": 0,
+      "replyCount": 0,
+      "likeCount": 0,
+      "quoteCount": 0,
+      "viewCount": 0,
+      "createdAt": "Sat Jul 19 22:54:07 +0000 2025",
+      "lang": "en",
+      "bookmarkCount": 0,
+      "isReply": false,
+      "inReplyToId": null,
+      "conversationId": "1946705136438431748",
+      "inReplyToUserId": null,
+      "inReplyToUsername": null,
+      "author": {
+        "type": "user",
+        "userName": "alexsanyakoval",
+        "url": "https://x.com/alexsanyakoval",
+        "twitterUrl": "https://twitter.com/alexsanyakoval",
+        "id": "3152441518",
+        "name": "Oleksandr Koval",
+        "isVerified": false,
+        "isBlueVerified": false,
+        "verifiedType": null,
+        "profilePicture": "https://pbs.twimg.com/profile_images/1632207299660980227/G8X3ZDrZ_normal.jpg",
+        "coverPicture": "",
+        "description": "",
+        "location": "Quito",
+        "followers": 29,
+        "following": 128,
+        "status": "",
+        "canDm": false,
+        "canMediaTag": true,
+        "createdAt": "Thu Apr 09 18:18:03 +0000 2015",
+        "entities": {
+          "description": {
+            "urls": []
+          },
+          "url": {}
+        },
+        "fastFollowersCount": 0,
+        "favouritesCount": 69,
+        "hasCustomTimelines": true,
+        "isTranslator": false,
+        "mediaCount": 2,
+        "statusesCount": 8,
+        "withheldInCountries": [],
+        "affiliatesHighlightedLabel": {},
+        "possiblySensitive": false,
+        "pinnedTweetIds": [],
+        "profile_bio": {
+          "description": "",
+          "entities": {
+            "description": {}
+          }
+        },
+        "isAutomated": false,
+        "automatedBy": null
+      },
+      "extendedEntities": {
+        "media": [
+          {
+            "allow_download_status": {
+              "allow_download": true
+            },
+            "display_url": "pic.twitter.com/Khhm0sufWd",
+            "expanded_url": "https://twitter.com/alexsanyakoval/status/1946705136438431748/photo/1",
+            "ext_media_availability": {
+              "status": "Available"
+            },
+            "features": {
+              "large": {
+                "faces": [
+                  {
+                    "h": 86,
+                    "w": 86,
+                    "x": 510,
+                    "y": 359
+                  }
+                ]
+              },
+              "orig": {
+                "faces": [
+                  {
+                    "h": 86,
+                    "w": 86,
+                    "x": 510,
+                    "y": 359
+                  }
+                ]
+              }
+            },
+            "id_str": "1946704916258426880",
+            "indices": [
+              69,
+              92
+            ],
+            "media_key": "3_1946704916258426880",
+            "media_results": {
+              "id": "QXBpTWVkaWFSZXN1bHRzOgwAAQoAARsEFc6oFxAACgACGwQWAevXUAQAAA==",
+              "result": {
+                "__typename": "ApiMedia",
+                "id": "QXBpTWVkaWE6DAABCgABGwQVzqgXEAAKAAIbBBYB69dQBAAA",
+                "media_key": "3_1946704916258426880"
+              }
+            },
+            "media_url_https": "https://pbs.twimg.com/media/GwQVzqgXEAAGvbc.jpg",
+            "original_info": {
+              "focus_rects": [
+                {
+                  "h": 636,
+                  "w": 1136,
+                  "x": 0,
+                  "y": 0
+                },
+                {
+                  "h": 636,
+                  "w": 636,
+                  "x": 0,
+                  "y": 0
+                },
+                {
+                  "h": 636,
+                  "w": 558,
+                  "x": 0,
+                  "y": 0
+                },
+                {
+                  "h": 636,
+                  "w": 318,
+                  "x": 4,
+                  "y": 0
+                },
+                {
+                  "h": 636,
+                  "w": 1310,
+                  "x": 0,
+                  "y": 0
+                }
+              ],
+              "height": 636,
+              "width": 1310
+            },
+            "sizes": {
+              "large": {
+                "h": 636,
+                "w": 1310
+              }
+            },
+            "type": "photo",
+            "url": "https://t.co/Khhm0sufWd"
+          }
+        ]
+      },
+      "card": null,
+      "place": {},
+      "entities": {
+        "urls": [
+          {
+            "display_url": "linkedin.com/posts/kovalas_…",
+            "expanded_url": "https://www.linkedin.com/posts/kovalas_candidateexperience-hiring-techrecruiting-activity-7351630837789929476-DzM1?utm_source=share&utm_medium=member_desktop&rcm=ACoAAAxBctkB-IBy_pKCQ-_f0LrBMyhGZ5Lw2Tg",
+            "indices": [
+              45,
+              68
+            ],
+            "url": "https://t.co/tKo1tfckav"
+          }
+        ]
+      },
+      "quoted_tweet": null,
+      "retweeted_tweet": null,
+      "article": null
+    }
+  ],
+  "rule_id": "31c944958e7a477499fa519d42707761",
+  "rule_tag": "My Tweets",
+  "rule_value": "from:alexsanyakoval since_time:1752958741",
+  "event_type": "tweet",
+  "timestamp": 1752965652370
+}

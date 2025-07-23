@@ -1,22 +1,24 @@
 import json
 import re
-from typing import List, Optional
-from pydantic import BaseModel, Field, validator
+from typing import List, Optional, Union
+from pydantic import BaseModel, Field, field_validator
 
 class TweetOutput(BaseModel):
     """Schema for transformed tweet data output"""
-    timestamp: Optional[str] = Field(None, description="Tweet timestamp")
+    timestamp: Optional[Union[str, int]] = Field(None, description="Tweet timestamp")
     text: str = Field("", description="Tweet text content")
     media: List[str] = Field(default_factory=list, description="Media URLs from tweet")
     links: List[str] = Field(default_factory=list, description="External links from tweet")
     
-    @validator('text')
+    @field_validator('text')
+    @classmethod
     def validate_text(cls, v):
         if not isinstance(v, str):
             return ""
         return v
     
-    @validator('media', 'links')
+    @field_validator('media', 'links')
+    @classmethod
     def validate_url_lists(cls, v):
         if not isinstance(v, list):
             return []
@@ -28,7 +30,7 @@ def extract_url(text) -> str:
         url = match.group(1)
         return url
     else:
-        return ""
+        return text
 
 def map_tweet_data(data) -> TweetOutput:
     tweet = data["tweets"][0]
@@ -45,7 +47,7 @@ def map_tweet_data(data) -> TweetOutput:
 
     # Extract display names from entities.urls
     url_entities = tweet.get("entities", {}).get("urls", [])
-    links = [extract_url(item["display_url"]) for item in url_entities if "display_url" in item]
+    links = [extract_url(item["expanded_url"]) for item in url_entities if "expanded_url" in item]
 
     return TweetOutput(
         timestamp=timestamp,
