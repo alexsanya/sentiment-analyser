@@ -16,6 +16,59 @@ services:
     healthcheck:
       test: rabbitmq-diagnostics check_port_connectivity
       interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - trading_network
+
+  news-trading-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: news-trading-app
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - ./logs:/app/logs  # Mount logs directory for persistence
+    environment:
+      # Twitter API Configuration
+      TWITTERAPI_KEY: ${TWITTERAPI_KEY}
+      
+      # Application Environment
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      
+      # RabbitMQ Configuration - Use service name for internal communication
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: ${RABBITMQ_PORT:-5672}
+      RABBITMQ_QUEUE: ${RABBITMQ_QUEUE:-tweet_events}
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-admin}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-changeme}
+      
+      # RabbitMQ Connection Monitoring
+      RABBITMQ_MONITOR_ENABLED: ${RABBITMQ_MONITOR_ENABLED:-true}
+      RABBITMQ_MONITOR_INTERVAL: ${RABBITMQ_MONITOR_INTERVAL:-30}
+      RABBITMQ_MAX_RETRY_ATTEMPTS: ${RABBITMQ_MAX_RETRY_ATTEMPTS:-3}
+      RABBITMQ_RETRY_DELAY: ${RABBITMQ_RETRY_DELAY:-5}
+      
+      # Message Buffer Configuration
+      MESSAGE_BUFFER_ENABLED: ${MESSAGE_BUFFER_ENABLED:-true}
+      MESSAGE_BUFFER_SIZE: ${MESSAGE_BUFFER_SIZE:-10}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - trading_network
+
+networks:
+  trading_network:
+    driver: bridge
+    name: trading_network
 
 volumes:
   rabbitmq_data:  # Named volume for persistence
