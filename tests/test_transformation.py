@@ -27,7 +27,7 @@ def test_map_tweet_data_snapshot():
         ),
         createdAt=1752965647,  # Unix timestamp for "Sat Jul 19 22:54:07 +0000 2025"
         text="My Rules of engagement\nReed more in my post: https://t.co/tKo1tfckav https://t.co/Khhm0sufWd",
-        media=["https://twitter.com/alexsanyakoval/status/1946705136438431748/photo/1"],
+        media=["https://pbs.twimg.com/media/GwQVzqgXEAAGvbc.jpg"],
         links=["https://www.linkedin.com/posts/kovalas_candidateexperience-hiring-techrecruiting-activity-7351630837789929476-DzM1?utm_source=share&utm_medium=member_desktop&rcm=ACoAAAxBctkB-IBy_pKCQ-_f0LrBMyhGZ5Lw2Tg"]
     )
     
