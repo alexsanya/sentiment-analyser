@@ -142,11 +142,15 @@ class MQMessenger:
             if not self.is_connected():
                 self._create_connection()
             
+            # Declare connection_events queue for test messages
+            connection_events_queue = "connection_events"
+            self._channel.queue_declare(queue=connection_events_queue, durable=True)
+            
             # Test publish a small message to validate connection
             test_message = {"_test": "connection_validation"}
             self._channel.basic_publish(
                 exchange='',
-                routing_key=self.queue_name,
+                routing_key=connection_events_queue,
                 body=json.dumps(test_message),
                 properties=pika.BasicProperties(delivery_mode=2)
             )

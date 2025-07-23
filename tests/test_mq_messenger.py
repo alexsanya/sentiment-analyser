@@ -409,9 +409,11 @@ class TestMQMessengerConnectionMethods:
         result = messenger.test_connection()
         
         assert result is True
+        # Verify that connection_events queue is declared
+        mock_channel.queue_declare.assert_any_call(queue="connection_events", durable=True)
         mock_channel.basic_publish.assert_called_once()
         call_args = mock_channel.basic_publish.call_args
-        assert call_args[1]["routing_key"] == "tweet_events"
+        assert call_args[1]["routing_key"] == "connection_events"
         assert '"_test": "connection_validation"' in call_args[1]["body"]
     
     @patch("pika.BlockingConnection")
