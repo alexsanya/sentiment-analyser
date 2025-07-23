@@ -1,6 +1,7 @@
 import json
 import re
-from schemas import TweetOutput
+from datetime import datetime
+from schemas import TweetOutput, DataSource
 
 def extract_url(text) -> str:
     match = re.search(r'\[.*?\]\((.*?)\)', text)
@@ -10,11 +11,28 @@ def extract_url(text) -> str:
     else:
         return text
 
-def map_tweet_data(data) -> TweetOutput:
-    tweet = data["tweets"][0]
+def parse_twitter_datetime(datetime_str: str) -> int:
+    """Convert Twitter datetime string to unix timestamp.
+    
+    Args:
+        datetime_str: Twitter datetime in format 'Sat Jul 19 22:54:07 +0000 2025'
+    
+    Returns:
+        Unix timestamp as integer
+    """
+    try:
+        # Parse Twitter datetime format: "Sat Jul 19 22:54:07 +0000 2025"
+        dt = datetime.strptime(datetime_str, "%a %b %d %H:%M:%S %z %Y")
+        return int(dt.timestamp())
+    except (ValueError, TypeError):
+        # Return 0 if parsing fails
+        return 0
 
-    # Extract timestamp
-    timestamp = data.get("timestamp")
+def map_tweet_data(tweet: dict) -> TweetOutput:
+
+    # Extract timestamp and convert to unix timestamp
+    created_at_str = tweet.get("createdAt", "")
+    createdAt = parse_twitter_datetime(created_at_str)
 
     # Extract text
     text = tweet.get("text", "")
@@ -28,7 +46,12 @@ def map_tweet_data(data) -> TweetOutput:
     links = [extract_url(item["expanded_url"]) for item in url_entities if "expanded_url" in item]
 
     return TweetOutput(
-        timestamp=timestamp,
+        data_source=DataSource(
+            name="Twitter",
+            author_name=tweet.get("author", {}).get("userName", ""),
+            author_id=tweet.get("author", {}).get("id", "")
+        ),
+        createdAt=createdAt,
         text=text,
         media=media,
         links=links

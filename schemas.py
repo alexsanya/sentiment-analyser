@@ -4,9 +4,16 @@ from typing import List, Optional, Union
 from pydantic import BaseModel, Field, field_validator
 
 
+class DataSource(BaseModel):
+    """Schema for data source"""
+    name: str = Field("", description="Data source name")
+    author_name: str = Field("", description="Data source author")
+    author_id: str = Field("", description="Data source author id")
+
 class TweetOutput(BaseModel):
     """Schema for transformed tweet data output"""
-    timestamp: Optional[Union[str, int]] = Field(None, description="Tweet timestamp")
+    data_source: DataSource = Field(default_factory=DataSource, description="Data source")
+    createdAt: int = Field(0, description="Tweet creation datetime as unix timestamp")
     text: str = Field("", description="Tweet text content")
     media: List[str] = Field(default_factory=list, description="Media URLs from tweet")
     links: List[str] = Field(default_factory=list, description="External links from tweet")

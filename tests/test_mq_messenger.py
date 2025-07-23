@@ -202,7 +202,13 @@ class TestMQMessengerPublish:
         assert call_args[1]["exchange"] == ""
         assert call_args[1]["routing_key"] == "tweet_events"
         # Schema validation transforms the message before publishing
-        expected_message = {"timestamp": 1234567890, "text": "test tweet", "media": [], "links": []}
+        expected_message = {
+            "data_source": {"name": "", "author_name": "", "author_id": ""},
+            "createdAt": 0,  # timestamp gets converted to createdAt and defaults to 0 if not provided
+            "text": "test tweet", 
+            "media": [], 
+            "links": []
+        }
         assert json.loads(call_args[1]["body"]) == expected_message
         assert call_args[1]["properties"].delivery_mode == 2
     
@@ -327,7 +333,7 @@ class TestMQMessengerPublish:
         
         # Create a TweetOutput object
         tweet_output = TweetOutput(
-            timestamp=1642743600,
+            createdAt=1642743600,
             text="Test tweet content",
             media=["https://example.com/image.jpg"],
             links=["https://example.com/article"]
@@ -345,10 +351,13 @@ class TestMQMessengerPublish:
         import json
         published_data = json.loads(published_body)
         
-        assert published_data['timestamp'] == 1642743600
+        assert published_data['createdAt'] == 1642743600
         assert published_data['text'] == "Test tweet content"
         assert published_data['media'] == ["https://example.com/image.jpg"]
         assert published_data['links'] == ["https://example.com/article"]
+        # Also verify data_source field is present
+        assert 'data_source' in published_data
+        assert published_data['data_source'] == {"name": "", "author_name": "", "author_id": ""}
 
 
 class TestMQMessengerContextManager:
@@ -478,7 +487,13 @@ class TestMQMessengerBufferIntegration:
         
         assert result is False
         # Schema validation transforms the message before buffering
-        expected_message = {"timestamp": 1234567890, "text": "test tweet", "media": [], "links": []}
+        expected_message = {
+            "data_source": {"name": "", "author_name": "", "author_id": ""},
+            "createdAt": 0,  # timestamp gets converted to createdAt and defaults to 0 if not provided
+            "text": "test tweet", 
+            "media": [], 
+            "links": []
+        }
         mock_buffer.add_message.assert_called_once_with(expected_message)
     
     @patch("pika.BlockingConnection")
@@ -496,7 +511,13 @@ class TestMQMessengerBufferIntegration:
         
         assert result is False
         # Schema validation transforms the message before buffering
-        expected_message = {"timestamp": 1234567890, "text": "test tweet", "media": [], "links": []}
+        expected_message = {
+            "data_source": {"name": "", "author_name": "", "author_id": ""},
+            "createdAt": 0,  # timestamp gets converted to createdAt and defaults to 0 if not provided
+            "text": "test tweet", 
+            "media": [], 
+            "links": []
+        }
         mock_buffer.add_message.assert_called_once_with(expected_message)
     
     def test_get_buffer_status(self):
