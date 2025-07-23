@@ -311,8 +311,8 @@ class TestMQMessengerPublish:
         """Test publish raises ValueError for message that doesn't match schema."""
         messenger = MQMessenger()
         
-        # Message with invalid field type (text should be string)
-        invalid_message = {"text": 123, "timestamp": "invalid"}
+        # Message with invalid field that can't be coerced (missing required structure)
+        invalid_message = {"createdAt": "not_a_number"}  # This should fail int conversion
         
         with pytest.raises(ValueError, match="Message does not match expected schema"):
             messenger.publish(invalid_message)

@@ -18,14 +18,14 @@ class TweetOutput(BaseModel):
     media: List[str] = Field(default_factory=list, description="Media URLs from tweet")
     links: List[str] = Field(default_factory=list, description="External links from tweet")
     
-    @field_validator('text')
+    @field_validator('text', mode='before')
     @classmethod
     def validate_text(cls, v):
         if not isinstance(v, str):
             return ""
         return v
     
-    @field_validator('media', 'links')
+    @field_validator('media', 'links', mode='before')
     @classmethod
     def validate_url_lists(cls, v):
         if not isinstance(v, list):
