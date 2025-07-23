@@ -3,9 +3,21 @@
 import os
 import threading
 import time
+import logging
 from unittest.mock import Mock, patch, MagicMock
 import pytest
 from rabbitmq_monitor import RabbitMQConnectionMonitor
+
+
+# Test-specific logging setup to capture messages properly
+@pytest.fixture(autouse=True)
+def setup_test_logging():
+    """Setup basic logging for tests to capture log messages."""
+    # Configure basic logging for tests
+    logging.basicConfig(level=logging.DEBUG, format='%(levelname)s:%(name)s:%(message)s')
+    yield
+    # Clean up after tests
+    logging.getLogger().handlers.clear()
 
 
 class TestRabbitMQConnectionMonitor:
@@ -93,22 +105,19 @@ class TestRabbitMQConnectionMonitor:
         # Cleanup
         monitor.stop()
     
-    def test_start_monitor_already_running(self, monitor, caplog):
+    def test_start_monitor_already_running(self, monitor):
         """Test starting monitor when already running."""
-        monitor.start()
-        
-        # Clear previous logs
-        caplog.clear()
-        
-        # Try to start again
-        monitor.start()
-        
-        # Check log records directly since structured logging might not show in caplog.text
-        log_messages = [record.message for record in caplog.records]
-        assert any("Connection monitor is already running" in msg for msg in log_messages)
-        
-        # Cleanup
-        monitor.stop()
+        with patch('rabbitmq_monitor.logger') as mock_logger:
+            monitor.start()
+            
+            # Try to start again
+            monitor.start()
+            
+            # Check that warning was logged
+            mock_logger.warning.assert_called_with("Connection monitor is already running")
+            
+            # Cleanup
+            monitor.stop()
     
     def test_stop_monitor(self, monitor):
         """Test stopping the connection monitor."""
@@ -202,29 +211,37 @@ class TestRabbitMQConnectionMonitor:
         mock_mq_messenger.connect.assert_called_once()
         mock_mq_messenger.test_connection.assert_called_once()
     
-    def test_max_retry_attempts_exceeded(self, monitor, mock_mq_messenger, caplog):
+    def test_max_retry_attempts_exceeded(self, monitor, mock_mq_messenger):
         """Test behavior when max retry attempts are exceeded."""
-        mock_mq_messenger.reconnect.return_value = False
-        
-        monitor._consecutive_failures = 4  # Exceeds max of 3
-        monitor._attempt_reconnection()
-        
-        log_messages = [record.message for record in caplog.records]
-        assert any("Maximum reconnection attempts exceeded" in msg for msg in log_messages)
-        assert monitor._consecutive_failures == 4  # No change
-        # Should not attempt reconnect
-        mock_mq_messenger.reconnect.assert_not_called()
+        with patch('rabbitmq_monitor.logger') as mock_logger:
+            mock_mq_messenger.reconnect.return_value = False
+            
+            monitor._consecutive_failures = 4  # Exceeds max of 3
+            monitor._attempt_reconnection()
+            
+            # Check that error was logged with expected message
+            mock_logger.error.assert_called_once()
+            call_args = mock_logger.error.call_args
+            assert "Maximum reconnection attempts exceeded" in call_args[0][0]
+            
+            assert monitor._consecutive_failures == 4  # No change
+            # Should not attempt reconnect
+            mock_mq_messenger.reconnect.assert_not_called()
     
-    def test_reconnection_exception_handling(self, monitor, mock_mq_messenger, caplog):
+    def test_reconnection_exception_handling(self, monitor, mock_mq_messenger):
         """Test exception handling during reconnection."""
-        mock_mq_messenger.reconnect.side_effect = Exception("Connection failed")
-        
-        monitor._consecutive_failures = 1
-        monitor._attempt_reconnection()
-        
-        log_messages = [record.message for record in caplog.records]
-        assert any("RabbitMQ reconnection attempt failed" in msg for msg in log_messages)
-        assert monitor._consecutive_failures == 1
+        with patch('rabbitmq_monitor.logger') as mock_logger:
+            mock_mq_messenger.reconnect.side_effect = Exception("Connection failed")
+            
+            monitor._consecutive_failures = 1
+            monitor._attempt_reconnection()
+            
+            # Check that error was logged
+            mock_logger.error.assert_called_once()
+            call_args = mock_logger.error.call_args
+            assert "RabbitMQ reconnection attempt failed" in call_args[0][0]
+            
+            assert monitor._consecutive_failures == 1
     
     def test_get_status(self, monitor):
         """Test getting monitor status information."""
@@ -244,59 +261,63 @@ class TestRabbitMQConnectionMonitor:
         
         assert status == expected
     
-    def test_monitor_loop_integration(self, mock_mq_messenger, caplog):
+    def test_monitor_loop_integration(self, mock_mq_messenger):
         """Test the complete monitoring loop integration."""
-        monitor = RabbitMQConnectionMonitor(
-            mq_messenger=mock_mq_messenger,
-            check_interval=0.1,  # Very short for testing
-            max_retry_attempts=3,
-            retry_delay=0.01
-        )
-        
-        # Simulate successful connection consistently
-        mock_mq_messenger.is_connected.return_value = True
-        mock_mq_messenger.test_connection.return_value = True
-        mock_mq_messenger.reconnect.return_value = True
-        
-        monitor.start()
-        
-        # Let it run a few cycles
-        time.sleep(0.3)
-        
-        monitor.stop()
-        
-        # Check that monitoring occurred
-        log_messages = [record.message for record in caplog.records]
-        assert any("Connection monitoring loop started" in msg for msg in log_messages)
-        assert any("Connection monitoring loop ended" in msg for msg in log_messages)
+        with patch('rabbitmq_monitor.logger') as mock_logger:
+            monitor = RabbitMQConnectionMonitor(
+                mq_messenger=mock_mq_messenger,
+                check_interval=0.1,  # Very short for testing
+                max_retry_attempts=3,
+                retry_delay=0.01
+            )
+            
+            # Simulate successful connection consistently
+            mock_mq_messenger.is_connected.return_value = True
+            mock_mq_messenger.test_connection.return_value = True
+            mock_mq_messenger.reconnect.return_value = True
+            
+            monitor.start()
+            
+            # Let it run a few cycles
+            time.sleep(0.3)
+            
+            monitor.stop()
+            
+            # Check that monitoring loop messages were logged
+            log_calls = [call[0][0] for call in mock_logger.info.call_args_list]
+            assert any("Connection monitoring loop started" in msg for msg in log_calls)
+            assert any("Connection monitoring loop ended" in msg for msg in log_calls)
     
-    def test_connection_status_change_logging(self, monitor, mock_mq_messenger, caplog):
+    def test_connection_status_change_logging(self, monitor, mock_mq_messenger):
         """Test logging of connection status changes."""
-        # Start with good connection
-        mock_mq_messenger.is_connected.return_value = True
-        mock_mq_messenger.test_connection.return_value = True
-        monitor._last_connection_status = True
-        
-        # Simulate connection failure
-        mock_mq_messenger.is_connected.return_value = False
-        mock_mq_messenger.test_connection.return_value = False
-        mock_mq_messenger.reconnect.return_value = True
-        
-        monitor._check_and_handle_connection()
-        
-        log_messages = [record.message for record in caplog.records]
-        assert any("RabbitMQ connection lost" in msg for msg in log_messages)
-        
-        # Simulate recovery
-        caplog.clear()
-        mock_mq_messenger.is_connected.return_value = True
-        mock_mq_messenger.test_connection.return_value = True
-        monitor._last_connection_status = False  # Simulate it was false
-        
-        monitor._check_and_handle_connection()
-        
-        log_messages = [record.message for record in caplog.records]
-        assert any("RabbitMQ connection restored" in msg for msg in log_messages)
+        with patch('rabbitmq_monitor.logger') as mock_logger:
+            # Start with good connection
+            mock_mq_messenger.is_connected.return_value = True
+            mock_mq_messenger.test_connection.return_value = True
+            monitor._last_connection_status = True
+            
+            # Simulate connection failure
+            mock_mq_messenger.is_connected.return_value = False
+            mock_mq_messenger.test_connection.return_value = False
+            mock_mq_messenger.reconnect.return_value = True
+            
+            monitor._check_and_handle_connection()
+            
+            # Check for connection lost warning
+            warning_calls = [call[0][0] for call in mock_logger.warning.call_args_list]
+            assert any("RabbitMQ connection lost" in msg for msg in warning_calls)
+            
+            # Reset mock and simulate recovery
+            mock_logger.reset_mock()
+            mock_mq_messenger.is_connected.return_value = True
+            mock_mq_messenger.test_connection.return_value = True
+            monitor._last_connection_status = False  # Simulate it was false
+            
+            monitor._check_and_handle_connection()
+            
+            # Check for connection restored info
+            info_calls = [call[0][0] for call in mock_logger.info.call_args_list]
+            assert any("RabbitMQ connection restored" in msg for msg in info_calls)
     
     def test_thread_shutdown_timeout(self, monitor):
         """Test thread shutdown with timeout."""

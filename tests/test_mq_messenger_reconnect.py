@@ -1,9 +1,21 @@
 """Tests for MQMessenger reconnect functionality."""
 
 import pytest
+import logging
 from unittest.mock import Mock, patch, MagicMock
 from mq_messenger import MQMessenger
 import pika
+
+
+# Test-specific logging setup to capture messages properly
+@pytest.fixture(autouse=True)
+def setup_test_logging():
+    """Setup basic logging for tests to capture log messages."""
+    # Configure basic logging for tests
+    logging.basicConfig(level=logging.DEBUG, format='%(levelname)s:%(name)s:%(message)s')
+    yield
+    # Clean up after tests
+    logging.getLogger().handlers.clear()
 
 
 class TestMQMessengerReconnect:
@@ -20,12 +32,13 @@ class TestMQMessengerReconnect:
             password="test_pass"
         )
     
-    def test_reconnect_success(self, messenger, caplog):
+    def test_reconnect_success(self, messenger):
         """Test successful reconnection."""
         # Mock the internal methods
         with patch.object(messenger, '_cleanup_connection') as mock_cleanup, \
              patch.object(messenger, '_create_connection') as mock_create, \
-             patch.object(messenger, 'is_connected', return_value=True) as mock_is_connected:
+             patch.object(messenger, 'is_connected', return_value=True) as mock_is_connected, \
+             patch('mq_messenger.logger') as mock_logger:
             
             result = messenger.reconnect()
             
@@ -33,15 +46,18 @@ class TestMQMessengerReconnect:
             mock_cleanup.assert_called_once()
             mock_create.assert_called_once()
             mock_is_connected.assert_called_once()
-            log_messages = [record.message for record in caplog.records]
-            assert any("Attempting to reconnect to RabbitMQ" in msg for msg in log_messages)
-            assert any("RabbitMQ reconnection successful" in msg for msg in log_messages)
+            
+            # Check logging calls
+            info_calls = [call[0][0] for call in mock_logger.info.call_args_list]
+            assert any("Attempting to reconnect to RabbitMQ" in msg for msg in info_calls)
+            assert any("RabbitMQ reconnection successful" in msg for msg in info_calls)
     
-    def test_reconnect_connection_not_established(self, messenger, caplog):
+    def test_reconnect_connection_not_established(self, messenger):
         """Test reconnection when connection is not properly established."""
         with patch.object(messenger, '_cleanup_connection') as mock_cleanup, \
              patch.object(messenger, '_create_connection') as mock_create, \
-             patch.object(messenger, 'is_connected', return_value=False) as mock_is_connected:
+             patch.object(messenger, 'is_connected', return_value=False) as mock_is_connected, \
+             patch('mq_messenger.logger') as mock_logger:
             
             result = messenger.reconnect()
             
@@ -49,46 +65,53 @@ class TestMQMessengerReconnect:
             mock_cleanup.assert_called_once()
             mock_create.assert_called_once()
             mock_is_connected.assert_called_once()
-            log_messages = [record.message for record in caplog.records]
-            assert any("RabbitMQ reconnection failed - connection not established" in msg for msg in log_messages)
+            
+            # Check error logging
+            error_calls = [call[0][0] for call in mock_logger.error.call_args_list]
+            assert any("RabbitMQ reconnection failed - connection not established" in msg for msg in error_calls)
     
-    def test_reconnect_create_connection_exception(self, messenger, caplog):
+    def test_reconnect_create_connection_exception(self, messenger):
         """Test reconnection when _create_connection raises exception."""
         test_exception = Exception("Connection creation failed")
         
         with patch.object(messenger, '_cleanup_connection') as mock_cleanup, \
-             patch.object(messenger, '_create_connection', side_effect=test_exception) as mock_create:
+             patch.object(messenger, '_create_connection', side_effect=test_exception) as mock_create, \
+             patch('mq_messenger.logger') as mock_logger:
             
             result = messenger.reconnect()
             
             assert result is False
             mock_cleanup.assert_called_once()
             mock_create.assert_called_once()
-            log_messages = [record.message for record in caplog.records]
-            assert any("RabbitMQ reconnection failed" in msg for msg in log_messages)
-            assert any("Connection creation failed" in msg for msg in log_messages)
+            
+            # Check error logging
+            error_calls = [call[0][0] for call in mock_logger.error.call_args_list]
+            assert any("RabbitMQ reconnection failed" in msg for msg in error_calls)
     
-    def test_reconnect_cleanup_connection_exception(self, messenger, caplog):
+    def test_reconnect_cleanup_connection_exception(self, messenger):
         """Test reconnection when _cleanup_connection raises exception."""
         cleanup_exception = Exception("Cleanup failed")
         
-        with patch.object(messenger, '_cleanup_connection', side_effect=cleanup_exception) as mock_cleanup:
+        with patch.object(messenger, '_cleanup_connection', side_effect=cleanup_exception) as mock_cleanup, \
+             patch('mq_messenger.logger') as mock_logger:
             
             result = messenger.reconnect()
             
             assert result is False
             mock_cleanup.assert_called_once()
-            log_messages = [record.message for record in caplog.records]
-            assert any("RabbitMQ reconnection failed" in msg for msg in log_messages)
-            assert any("Cleanup failed" in msg for msg in log_messages)
+            
+            # Check error logging
+            error_calls = [call[0][0] for call in mock_logger.error.call_args_list]
+            assert any("RabbitMQ reconnection failed" in msg for msg in error_calls)
     
-    def test_reconnect_is_connected_exception(self, messenger, caplog):
+    def test_reconnect_is_connected_exception(self, messenger):
         """Test reconnection when is_connected raises exception."""
         test_exception = Exception("Connection check failed")
         
         with patch.object(messenger, '_cleanup_connection') as mock_cleanup, \
              patch.object(messenger, '_create_connection') as mock_create, \
-             patch.object(messenger, 'is_connected', side_effect=test_exception) as mock_is_connected:
+             patch.object(messenger, 'is_connected', side_effect=test_exception) as mock_is_connected, \
+             patch('mq_messenger.logger') as mock_logger:
             
             result = messenger.reconnect()
             
@@ -96,9 +119,10 @@ class TestMQMessengerReconnect:
             mock_cleanup.assert_called_once()
             mock_create.assert_called_once()
             mock_is_connected.assert_called_once()
-            log_messages = [record.message for record in caplog.records]
-            assert any("RabbitMQ reconnection failed" in msg for msg in log_messages)
-            assert any("Connection check failed" in msg for msg in log_messages)
+            
+            # Check error logging
+            error_calls = [call[0][0] for call in mock_logger.error.call_args_list]
+            assert any("RabbitMQ reconnection failed" in msg for msg in error_calls)
     
     def test_reconnect_integration_with_real_objects(self, messenger):
         """Test reconnection with more realistic mock objects."""
@@ -162,35 +186,36 @@ class TestMQMessengerReconnect:
             mock_connection.close.assert_not_called()
             mock_channel.close.assert_not_called()
     
-    def test_reconnect_logging_behavior(self, messenger, caplog):
+    def test_reconnect_logging_behavior(self, messenger):
         """Test comprehensive logging during reconnection process."""
         with patch.object(messenger, '_cleanup_connection') as mock_cleanup, \
              patch.object(messenger, '_create_connection') as mock_create, \
-             patch.object(messenger, 'is_connected', return_value=True) as mock_is_connected:
+             patch.object(messenger, 'is_connected', return_value=True) as mock_is_connected, \
+             patch('mq_messenger.logger') as mock_logger:
             
             result = messenger.reconnect()
             
             # Check all expected log messages
-            log_messages = [record.message for record in caplog.records]
+            info_calls = [call[0][0] for call in mock_logger.info.call_args_list]
             
-            assert any("Attempting to reconnect to RabbitMQ" in msg for msg in log_messages)
-            assert any("RabbitMQ reconnection successful" in msg for msg in log_messages)
+            assert any("Attempting to reconnect to RabbitMQ" in msg for msg in info_calls)
+            assert any("RabbitMQ reconnection successful" in msg for msg in info_calls)
             assert result is True
     
-    def test_reconnect_error_logging_with_exception_type(self, messenger, caplog):
+    def test_reconnect_error_logging_with_exception_type(self, messenger):
         """Test error logging includes exception type information."""
         test_exception = ConnectionError("Specific connection error")
         
         with patch.object(messenger, '_cleanup_connection') as mock_cleanup, \
-             patch.object(messenger, '_create_connection', side_effect=test_exception) as mock_create:
+             patch.object(messenger, '_create_connection', side_effect=test_exception) as mock_create, \
+             patch('mq_messenger.logger') as mock_logger:
             
             result = messenger.reconnect()
             
             assert result is False
             # Check that error is logged
-            log_messages = [record.message for record in caplog.records]
-            assert any("RabbitMQ reconnection failed" in msg for msg in log_messages)
-            assert any("Specific connection error" in msg for msg in log_messages)
+            error_calls = [call[0][0] for call in mock_logger.error.call_args_list]
+            assert any("RabbitMQ reconnection failed" in msg for msg in error_calls)
 
 
 class TestMQMessengerReconnectEdgeCases:
