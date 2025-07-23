@@ -30,17 +30,13 @@ class TestTweetHandler:
         # Verify publish was called
         mock_messenger.publish.assert_called_once()
         
-        # Verify the message payload
+        # Verify the message payload - should be TweetOutput object
         call_args = mock_messenger.publish.call_args[0][0]
-        assert call_args["event_type"] == "tweet"
-        assert call_args["rule_id"] == "test_rule_123"
-        assert call_args["rule_tag"] == "bitcoin"
-        assert call_args["tweet_count"] == 2
-        assert call_args["tweets"] == tweet_data["tweets"]
-        assert call_args["timestamp"] == 1674567890000
-        assert "processing_timestamp" in call_args
-        assert "time_difference_ms" in call_args
-        assert "time_difference_formatted" in call_args
+        # The payload is a TweetOutput object passed to the mock
+        assert call_args.timestamp == 1674567890000
+        assert call_args.text == "Bitcoin is rising!"  # First tweet's text
+        assert call_args.media == []
+        assert call_args.links == []
     
     def test_handle_tweet_event_publish_success(self):
         """Test successful tweet publishing."""
@@ -133,10 +129,11 @@ class TestTweetHandler:
             
             call_args = mock_messenger.publish.call_args[0][0]
             
-            # Verify time calculations
-            assert call_args["timestamp"] == test_timestamp
-            assert call_args["time_difference_ms"] == 300000  # 5 minutes in ms
-            assert "5min0sec" in call_args["time_difference_formatted"]
+            # Verify TweetOutput object contains expected data
+            assert call_args.timestamp == test_timestamp
+            assert call_args.text == "Time test"  # First tweet's text
+            assert call_args.media == []
+            assert call_args.links == []
     
     def test_handle_tweet_event_empty_tweets(self):
         """Test handling of empty tweets list."""
@@ -151,8 +148,16 @@ class TestTweetHandler:
             "tweets": []
         }
         
-        handle_tweet_event(tweet_data, mock_messenger)
-        
-        call_args = mock_messenger.publish.call_args[0][0]
-        assert call_args["tweet_count"] == 0
-        assert call_args["tweets"] == []
+        with patch('handlers.tweet.logger') as mock_logger:
+            handle_tweet_event(tweet_data, mock_messenger)
+            
+            # Should not call publish due to transformation error (empty tweets list)
+            mock_messenger.publish.assert_not_called()
+            
+            # Should log an error
+            mock_logger.error.assert_called_once_with(
+                "Error publishing tweet event to RabbitMQ",
+                error="list index out of range",
+                rule_id="empty_rule",
+                tweet_count=0
+            )

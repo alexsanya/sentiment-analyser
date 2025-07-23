@@ -4,6 +4,7 @@ import time
 from typing import Dict, Any
 from logging_config import get_logger
 from mq_messenger import MQMessenger
+from transformation import map_tweet_data
 
 logger = get_logger(__name__)
 
@@ -42,21 +43,14 @@ def handle_tweet_event(result_json: Dict[str, Any], mq_messenger: MQMessenger) -
         time_difference_formatted=diff_time_formatted,
         time_difference_ms=diff_time_ms
     )
+
+    logger.info(result_json)
     
     # Publish tweet event to RabbitMQ
     try:
         # Create message payload with all extracted data
-        mq_payload = {
-            "event_type": event_type,
-            "rule_id": rule_id,
-            "rule_tag": rule_tag,
-            "tweet_count": len(tweets),
-            "tweets": tweets,
-            "timestamp": timestamp,
-            "processing_timestamp": current_time_ms,
-            "time_difference_ms": diff_time_ms,
-            "time_difference_formatted": diff_time_formatted
-        }
+
+        mq_payload = map_tweet_data(result_json)
         
         success = mq_messenger.publish(mq_payload)
         if success:

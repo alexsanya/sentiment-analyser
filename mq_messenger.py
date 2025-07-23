@@ -8,8 +8,10 @@ from typing import Dict, Any, Optional, List
 import pika
 from pika.adapters.blocking_connection import BlockingChannel
 from pika.connection import Connection
+from pydantic import ValidationError
 from logging_config import get_logger
 from message_buffer import MessageBuffer
+from schemas import TweetOutput
 
 logger = get_logger(__name__)
 
@@ -183,6 +185,14 @@ class MQMessenger:
         if not message:
             raise ValueError("Message cannot be empty")
         
+        # Validate message against TweetOutput schema
+        try:
+            validated_message = TweetOutput(**message)
+            # Convert back to dict for JSON serialization
+            message = validated_message.model_dump()
+        except ValidationError as e:
+            raise ValueError(f"Message does not match expected schema: {str(e)}")
+        
         # Pre-validate message size by serializing to JSON
         try:
             json_message = json.dumps(message, default=str)
@@ -314,10 +324,22 @@ class MQMessenger:
             buffer_timestamp = buffered_message["timestamp"]
             
             try:
-                # Try to publish the original message directly (bypassing buffer logic)
+                # Validate message against schema before publishing
+                try:
+                    validated_message = TweetOutput(**original_message)
+                    validated_dict = validated_message.model_dump()
+                except ValidationError as e:
+                    logger.warning(
+                        "Skipping buffered message due to schema validation failure",
+                        error=str(e),
+                        buffer_age_seconds=round(time.time() - buffer_timestamp, 2)
+                    )
+                    continue
+                
+                # Try to publish the validated message directly (bypassing buffer logic)
                 self._ensure_connection()
                 
-                json_message = json.dumps(original_message, default=str)
+                json_message = json.dumps(validated_dict, default=str)
                 self._channel.basic_publish(
                     exchange='',
                     routing_key=self.queue_name,
