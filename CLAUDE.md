@@ -12,6 +12,7 @@ This is a news-powered trading system that monitors Twitter/X feeds in real-time
 - **Package Manager**: UV (modern Python package manager)
 - **Key Dependencies**: 
   - `websocket-client` for real-time Twitter API connections
+  - `pika` for RabbitMQ message publishing and connection monitoring
   - `dotenv` for environment variable management
   - `structlog` for structured logging with JSON output
 - **Testing**: 
@@ -43,6 +44,15 @@ uv run pytest tests/test_signal_handler.py
 
 # Run tests in verbose mode
 uv run pytest tests/ -v
+
+# Run RabbitMQ monitor tests
+uv run pytest tests/test_rabbitmq_monitor.py
+
+# Run RabbitMQ monitor tests with coverage
+uv run pytest tests/test_rabbitmq_monitor.py --cov=rabbitmq_monitor --cov-report=term-missing
+
+# Run all RabbitMQ-related tests
+uv run pytest tests/test_rabbitmq_monitor.py tests/test_mq_messenger.py tests/test_main_rabbitmq.py -v
 ```
 
 ## Architecture
@@ -52,6 +62,7 @@ uv run pytest tests/ -v
 - **Main Application** (`main.py`): Application orchestration and dependency injection coordination
 - **WebSocket Manager** (`websocket_manager.py`): Connection lifecycle management with integrated message processing and MQMessenger dependency injection
 - **MQ Messenger** (`mq_messenger.py`): RabbitMQ message publishing service injected into WebSocket manager
+- **RabbitMQ Monitor** (`rabbitmq_monitor.py`): Automatic connection monitoring with health checks and reconnection logic
 - **Event Handlers** (`handlers/` package): Modular message and lifecycle event processing
 - **Structured Logging** (`logging_config.py`): Centralized logging configuration
 
@@ -75,6 +86,7 @@ uv run pytest tests/ -v
 ├── main.py                    # Application entry point with dependency injection
 ├── websocket_manager.py       # WebSocket lifecycle management with integrated message handling
 ├── mq_messenger.py            # RabbitMQ message publishing service
+├── rabbitmq_monitor.py        # RabbitMQ connection monitoring with automatic reconnection
 ├── logging_config.py          # Structured logging configuration
 ├── handlers/                  # Event and message handlers package
 │   ├── __init__.py           # Package exports
@@ -96,6 +108,24 @@ uv run pytest tests/ -v
 - **`.python-version`**: Enforces Python 3.12 requirement
 - **`logging_config.py`**: Structured logging configuration with file separation by log level
 
+### RabbitMQ Monitor Configuration
+
+The RabbitMQ connection monitor is configurable via environment variables:
+
+- **`RABBITMQ_MONITOR_ENABLED`**: Enable/disable connection monitoring (default: "true")
+- **`RABBITMQ_MONITOR_INTERVAL`**: Seconds between health checks (default: "30")
+- **`RABBITMQ_MAX_RETRY_ATTEMPTS`**: Maximum reconnection attempts before giving up (default: "3")
+- **`RABBITMQ_RETRY_DELAY`**: Seconds to wait between reconnection attempts (default: "5")
+
+Example `.env` configuration:
+```bash
+# RabbitMQ Connection Monitoring
+RABBITMQ_MONITOR_ENABLED=true
+RABBITMQ_MONITOR_INTERVAL=30
+RABBITMQ_MAX_RETRY_ATTEMPTS=3
+RABBITMQ_RETRY_DELAY=5
+```
+
 ## Key Components
 
 - **Connection Management** (`websocket_manager.py`): Automatic reconnection on failures with retry logic and integrated message handling
@@ -106,6 +136,52 @@ uv run pytest tests/ -v
 - **Error Diagnosis** (`handlers/error.py`): Specialized error handling with diagnostic suggestions
 - **Structured Logging**: JSON-formatted logs separated by level (error.log, warning.log, app.log)
 - **Graceful Shutdown**: Signal handling with proper WebSocket and MQ connection cleanup
+
+## RabbitMQ Connection Monitoring
+
+The application includes sophisticated RabbitMQ connection monitoring to ensure reliable message delivery and automatic recovery from connection failures.
+
+### Monitor Features
+
+- **Automatic Health Checks**: Periodic connection health monitoring with configurable intervals
+- **Intelligent Reconnection**: Automatic reconnection attempts with exponential backoff and retry limits
+- **Status Tracking**: Connection state monitoring with failure counting and status change detection
+- **Background Operation**: Non-blocking monitoring in dedicated daemon threads
+- **Graceful Shutdown**: Clean monitoring thread termination during application shutdown
+- **Environment Configuration**: Fully configurable via environment variables
+
+### Connection Monitoring Process
+
+1. **Health Check Cycle**: Monitor performs periodic health checks using `MQMessenger.is_connected()` and `MQMessenger.test_connection()`
+2. **Failure Detection**: Tracks consecutive connection failures and logs status changes
+3. **Automatic Reconnection**: Attempts reconnection using `MQMessenger.reconnect()` method with fallback to `close()` + `connect()`
+4. **Retry Logic**: Implements configurable retry attempts with delays between reconnection attempts
+5. **Status Logging**: Comprehensive logging of connection status changes, failures, and recovery
+
+### Monitor Integration
+
+The monitor is integrated into the main application lifecycle:
+
+```python
+# Initialize RabbitMQ connection monitor
+connection_monitor = RabbitMQConnectionMonitor.from_env(mq_messenger)
+connection_monitor.start()
+
+# Graceful shutdown handling
+def shutdown_handler(signum, frame):
+    connection_monitor.stop()  # Stop monitor first
+    ws_manager.shutdown()      # Then shutdown WebSocket
+    mq_messenger.close()       # Finally close MQ connection
+```
+
+### Monitor Status Information
+
+The monitor provides real-time status information via `get_status()`:
+- **is_running**: Monitor thread operational status
+- **last_connection_status**: Most recent connection health status
+- **consecutive_failures**: Current failure count for retry logic
+- **max_retry_attempts**: Configured maximum retry attempts
+- **check_interval**: Health check frequency in seconds
 
 ## Testing
 
@@ -121,7 +197,12 @@ tests/
 ├── test_connection_management.py  # Connection management tests (8 tests)
 ├── test_websocket_lifecycle.py    # WebSocket lifecycle management tests (6 tests)
 ├── test_error_handling.py         # Comprehensive error handling tests (7 tests)
-└── test_integration.py            # End-to-end integration tests (2 tests)
+├── test_integration.py            # End-to-end integration tests (2 tests)
+├── test_rabbitmq_monitor.py       # RabbitMQ connection monitor tests (23 tests)
+├── test_mq_messenger.py           # MQMessenger functionality tests
+├── test_mq_messenger_reconnect.py # MQMessenger reconnection tests
+├── test_main_rabbitmq.py          # Main application RabbitMQ integration tests
+└── test_tweet_handler.py          # Tweet handler with MQ integration tests
 
 test_websocket_manager.py          # Main test suite entry point
 conftest.py                        # Root-level fixtures for main runner
@@ -134,6 +215,7 @@ conftest.py                        # Root-level fixtures for main runner
 - **WebSocket Lifecycle Tests**: WebSocketApp creation, callback assignment, ping parameters, current_ws reference management
 - **Error Handling Tests**: Comprehensive error scenarios, exception types, retry mechanisms, finally block cleanup
 - **Integration Tests**: End-to-end workflows, complete lifecycle management, signal-to-shutdown sequences
+- **RabbitMQ Monitor Tests**: Connection monitoring, health checks, automatic reconnection, failure tracking, thread management, environment configuration
 
 ### Test Execution Options
 ```bash
@@ -150,12 +232,15 @@ uv run pytest tests/test_connection_management.py -v
 uv run pytest tests/test_websocket_lifecycle.py -v
 uv run pytest tests/test_error_handling.py -v
 uv run pytest tests/test_integration.py -v
+uv run pytest tests/test_rabbitmq_monitor.py -v
 
 # Run specific test classes
 uv run pytest tests/test_connection_management.py::TestConnectionManagement -v
 uv run pytest tests/test_websocket_lifecycle.py::TestWebSocketLifecycle -v
 uv run pytest tests/test_error_handling.py::TestErrorHandling -v
 uv run pytest tests/test_integration.py::TestIntegration -v
+uv run pytest tests/test_rabbitmq_monitor.py::TestRabbitMQConnectionMonitor -v
+uv run pytest tests/test_rabbitmq_monitor.py::TestRabbitMQMonitorEnvironmentIntegration -v
 
 # Run with coverage reporting
 uv run pytest test_websocket_manager.py --cov=websocket_manager --cov-report=term-missing
@@ -168,8 +253,9 @@ uv run pytest test_websocket_manager.py --cov=websocket_manager --cov-report=htm
 ```
 
 ### Test Coverage
-- **Current Coverage**: 92% of websocket_manager.py (70/70 tests passing across all components)
-- **Tested Components**: WebSocketManager initialization, signal handling, connection management, WebSocket lifecycle, comprehensive error handling, integration workflows, MQMessenger functionality, and tweet handler operations
+- **WebSocket Manager Coverage**: 92% of websocket_manager.py (70/70 tests passing across all components)
+- **RabbitMQ Monitor Coverage**: Comprehensive test coverage with 23 test cases covering all monitor functionality
+- **Tested Components**: WebSocketManager initialization, signal handling, connection management, WebSocket lifecycle, comprehensive error handling, integration workflows, MQMessenger functionality, RabbitMQ connection monitoring, and tweet handler operations
 - **Connection Management Tests** (8 tests): Connection lifecycle, retry logic, error handling, shutdown coordination
   - Successful WebSocket connection establishment
   - Connection retry logic with 5-second delays  
@@ -201,6 +287,21 @@ uv run pytest test_websocket_manager.py --cov=websocket_manager --cov-report=htm
   - Comprehensive logging validation throughout integration flows
   - Resource cleanup verification after complete operations
 - **Remaining Coverage**: 4% uncovered lines primarily in edge case logging scenarios
+- **RabbitMQ Monitor Tests** (23 tests): Comprehensive connection monitoring, health checks, and automatic reconnection testing
+  - Monitor initialization with default and custom parameters
+  - Environment variable configuration and factory method creation
+  - Monitor start/stop lifecycle with proper thread management
+  - Connection health check success and failure scenarios
+  - Automatic reconnection attempts with retry logic and failure counting
+  - Fallback reconnection methods when primary reconnect unavailable
+  - Maximum retry attempt limits and proper error handling
+  - Exception handling during reconnection attempts with comprehensive logging
+  - Real-time status information tracking and reporting
+  - Complete monitoring loop integration with graceful shutdown
+  - Connection status change detection and logging
+  - Thread shutdown with timeout handling and cleanup verification
+  - Environment configuration integration testing
+  - Main application integration patterns and lifecycle management
 
 ## Logging
 
