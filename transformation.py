@@ -39,7 +39,7 @@ def map_tweet_data(tweet: dict) -> TweetOutput:
 
     # Extract media URLs from extendedEntities
     media_entities = tweet.get("extendedEntities", {}).get("media", [])
-    media = [item["expanded_url"] for item in media_entities]
+    media = [item["media_url_https"] for item in media_entities]
 
     # Extract display names from entities.urls
     url_entities = tweet.get("entities", {}).get("urls", [])

@@ -41,6 +41,12 @@ def handle_tweet_event(result_json: Dict[str, Any], mq_messenger: MQMessenger) -
 
     # iterate over tweets and extract data
     for tweet in tweets:
+        if tweet.get("isReply", False):
+            logger.info(
+                "Skipping reply tweet",
+                tweet = tweet
+            )
+            continue
         tweet_data = map_tweet_data(tweet)
         logger.info(
             "Tweet received",
