@@ -15,8 +15,8 @@ RUN pip install uv
 # Copy dependency files first for better Docker layer caching
 COPY pyproject.toml ./
 
-# Install dependencies using UV
-RUN uv sync --no-dev
+# Install dependencies using UV globally (no virtual environment)
+RUN uv pip install --system -r pyproject.toml
 
 # Copy application code
 COPY . .
