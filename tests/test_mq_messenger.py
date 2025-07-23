@@ -193,7 +193,7 @@ class TestMQMessengerPublish:
         messenger._connection = mock_conn
         messenger._channel = mock_channel
         
-        test_message = {"event_type": "tweet", "data": "test"}
+        test_message = {"text": "test tweet", "timestamp": 1234567890}
         result = messenger.publish(test_message)
         
         assert result is True
@@ -201,7 +201,15 @@ class TestMQMessengerPublish:
         call_args = mock_channel.basic_publish.call_args
         assert call_args[1]["exchange"] == ""
         assert call_args[1]["routing_key"] == "tweet_events"
-        assert json.loads(call_args[1]["body"]) == test_message
+        # Schema validation transforms the message before publishing
+        expected_message = {
+            "data_source": {"name": "", "author_name": "", "author_id": ""},
+            "createdAt": 0,  # timestamp gets converted to createdAt and defaults to 0 if not provided
+            "text": "test tweet", 
+            "media": [], 
+            "links": []
+        }
+        assert json.loads(call_args[1]["body"]) == expected_message
         assert call_args[1]["properties"].delivery_mode == 2
     
     @patch("pika.BlockingConnection")
@@ -214,7 +222,7 @@ class TestMQMessengerPublish:
         mock_connection.return_value = mock_conn
         
         messenger = MQMessenger()
-        test_message = {"event_type": "tweet", "data": "test"}
+        test_message = {"text": "test tweet", "timestamp": 1234567890}
         result = messenger.publish(test_message)
         
         assert result is True
@@ -227,7 +235,7 @@ class TestMQMessengerPublish:
         mock_connection.side_effect = Exception("Publish failed")
         
         messenger = MQMessenger()
-        test_message = {"event_type": "tweet", "data": "test"}
+        test_message = {"text": "test tweet", "timestamp": 1234567890}
         result = messenger.publish(test_message)
         
         assert result is False
@@ -294,10 +302,62 @@ class TestMQMessengerPublish:
         
         # Create a message that's too large (> 1MB)
         large_data = "x" * (1024 * 1024 + 1)  # Just over 1MB
-        large_message = {"data": large_data}
+        large_message = {"text": large_data, "timestamp": 1234567890}
         
         with pytest.raises(ValueError, match="Message too large"):
             messenger.publish(large_message)
+    
+    def test_publish_validation_schema_error(self):
+        """Test publish raises ValueError for message that doesn't match schema."""
+        messenger = MQMessenger()
+        
+        # Message with invalid field that can't be coerced (missing required structure)
+        invalid_message = {"createdAt": "not_a_number"}  # This should fail int conversion
+        
+        with pytest.raises(ValueError, match="Message does not match expected schema"):
+            messenger.publish(invalid_message)
+    
+    @patch("pika.BlockingConnection")
+    def test_publish_with_tweetoutput_object(self, mock_connection):
+        """Test publish accepts TweetOutput objects and converts them to dictionaries."""
+        from schemas import TweetOutput
+        
+        mock_conn = Mock()
+        mock_channel = Mock()
+        mock_conn.channel.return_value = mock_channel
+        mock_conn.is_closed = False
+        mock_channel.is_closed = False
+        mock_connection.return_value = mock_conn
+        
+        messenger = MQMessenger()
+        
+        # Create a TweetOutput object
+        tweet_output = TweetOutput(
+            createdAt=1642743600,
+            text="Test tweet content",
+            media=["https://example.com/image.jpg"],
+            links=["https://example.com/article"]
+        )
+        
+        # Should successfully publish without validation errors
+        result = messenger.publish(tweet_output)
+        
+        assert result is True
+        mock_channel.basic_publish.assert_called_once()
+        
+        # Verify the published message was converted to dictionary format
+        call_args = mock_channel.basic_publish.call_args
+        published_body = call_args[1]['body']
+        import json
+        published_data = json.loads(published_body)
+        
+        assert published_data['createdAt'] == 1642743600
+        assert published_data['text'] == "Test tweet content"
+        assert published_data['media'] == ["https://example.com/image.jpg"]
+        assert published_data['links'] == ["https://example.com/article"]
+        # Also verify data_source field is present
+        assert 'data_source' in published_data
+        assert published_data['data_source'] == {"name": "", "author_name": "", "author_id": ""}
 
 
 class TestMQMessengerContextManager:
@@ -349,9 +409,11 @@ class TestMQMessengerConnectionMethods:
         result = messenger.test_connection()
         
         assert result is True
+        # Verify that connection_events queue is declared
+        mock_channel.queue_declare.assert_any_call(queue="connection_events", durable=True)
         mock_channel.basic_publish.assert_called_once()
         call_args = mock_channel.basic_publish.call_args
-        assert call_args[1]["routing_key"] == "tweet_events"
+        assert call_args[1]["routing_key"] == "connection_events"
         assert '"_test": "connection_validation"' in call_args[1]["body"]
     
     @patch("pika.BlockingConnection")
@@ -404,7 +466,7 @@ class TestMQMessengerBufferIntegration:
         messenger._connection = mock_conn
         messenger._channel = mock_channel
         
-        test_message = {"event_type": "tweet", "data": "test"}
+        test_message = {"text": "test tweet", "timestamp": 1234567890}
         result = messenger.publish(test_message)
         
         assert result is True
@@ -422,11 +484,19 @@ class TestMQMessengerBufferIntegration:
         mock_buffer.max_size = 10
         
         messenger = MQMessenger(message_buffer=mock_buffer)
-        test_message = {"event_type": "tweet", "data": "test"}
+        test_message = {"text": "test tweet", "timestamp": 1234567890}
         result = messenger.publish(test_message)
         
         assert result is False
-        mock_buffer.add_message.assert_called_once_with(test_message)
+        # Schema validation transforms the message before buffering
+        expected_message = {
+            "data_source": {"name": "", "author_name": "", "author_id": ""},
+            "createdAt": 0,  # timestamp gets converted to createdAt and defaults to 0 if not provided
+            "text": "test tweet", 
+            "media": [], 
+            "links": []
+        }
+        mock_buffer.add_message.assert_called_once_with(expected_message)
     
     @patch("pika.BlockingConnection")
     def test_publish_failure_buffer_disabled(self, mock_connection):
@@ -438,11 +508,19 @@ class TestMQMessengerBufferIntegration:
         mock_buffer.enabled = False
         
         messenger = MQMessenger(message_buffer=mock_buffer)
-        test_message = {"event_type": "tweet", "data": "test"}
+        test_message = {"text": "test tweet", "timestamp": 1234567890}
         result = messenger.publish(test_message)
         
         assert result is False
-        mock_buffer.add_message.assert_called_once_with(test_message)
+        # Schema validation transforms the message before buffering
+        expected_message = {
+            "data_source": {"name": "", "author_name": "", "author_id": ""},
+            "createdAt": 0,  # timestamp gets converted to createdAt and defaults to 0 if not provided
+            "text": "test tweet", 
+            "media": [], 
+            "links": []
+        }
+        mock_buffer.add_message.assert_called_once_with(expected_message)
     
     def test_get_buffer_status(self):
         """Test get_buffer_status method delegates to buffer."""

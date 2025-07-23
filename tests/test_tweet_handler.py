@@ -20,27 +20,34 @@ class TestTweetHandler:
             "rule_tag": "bitcoin",
             "timestamp": 1674567890000,
             "tweets": [
-                {"id": "123", "text": "Bitcoin is rising!", "author": "user1"},
-                {"id": "124", "text": "Crypto market update", "author": "user2"}
+                {
+                    "id": "123", 
+                    "text": "Bitcoin is rising!", 
+                    "createdAt": "Tue Jan 24 08:44:50 +0000 2023",
+                    "author": {"userName": "user1", "id": "user1_id"}
+                },
+                {
+                    "id": "124", 
+                    "text": "Crypto market update", 
+                    "createdAt": "Tue Jan 24 08:44:50 +0000 2023",
+                    "author": {"userName": "user2", "id": "user2_id"}
+                }
             ]
         }
         
         handle_tweet_event(tweet_data, mock_messenger)
         
-        # Verify publish was called
-        mock_messenger.publish.assert_called_once()
+        # Verify publish was called twice (once for each tweet)
+        assert mock_messenger.publish.call_count == 2
         
-        # Verify the message payload
-        call_args = mock_messenger.publish.call_args[0][0]
-        assert call_args["event_type"] == "tweet"
-        assert call_args["rule_id"] == "test_rule_123"
-        assert call_args["rule_tag"] == "bitcoin"
-        assert call_args["tweet_count"] == 2
-        assert call_args["tweets"] == tweet_data["tweets"]
-        assert call_args["timestamp"] == 1674567890000
-        assert "processing_timestamp" in call_args
-        assert "time_difference_ms" in call_args
-        assert "time_difference_formatted" in call_args
+        # Verify the first tweet's message payload
+        first_call_args = mock_messenger.publish.call_args_list[0][0][0]
+        assert first_call_args.createdAt == 1674549890  # Unix timestamp
+        assert first_call_args.text == "Bitcoin is rising!"
+        assert first_call_args.media == []
+        assert first_call_args.links == []
+        assert first_call_args.data_source.author_name == "user1"
+        assert first_call_args.data_source.author_id == "user1_id"
     
     def test_handle_tweet_event_publish_success(self):
         """Test successful tweet publishing."""
@@ -52,17 +59,21 @@ class TestTweetHandler:
             "rule_id": "success_rule",
             "rule_tag": "ethereum",
             "timestamp": 1674567890000,
-            "tweets": [{"id": "789", "text": "ETH update", "author": "crypto_user"}]
+            "tweets": [{
+                "id": "789", 
+                "text": "ETH update", 
+                "createdAt": "Tue Jan 24 08:44:50 +0000 2023",
+                "author": {"userName": "crypto_user", "id": "crypto_user_id"}
+            }]
         }
         
         with patch('handlers.tweet.logger') as mock_logger:
             handle_tweet_event(tweet_data, mock_messenger)
             
-            # Verify success logging
+            # Verify success logging (first the tweet received log, then publish success)
             mock_logger.info.assert_any_call(
                 "Tweet event published to RabbitMQ",
-                rule_id="success_rule",
-                tweet_count=1
+                tweet_data=mock_messenger.publish.call_args[0][0]
             )
     
     def test_handle_tweet_event_publish_failure(self):
@@ -75,7 +86,12 @@ class TestTweetHandler:
             "rule_id": "fail_rule",
             "rule_tag": "dogecoin",
             "timestamp": 1674567890000,
-            "tweets": [{"id": "456", "text": "DOGE to the moon", "author": "doge_fan"}]
+            "tweets": [{
+                "id": "456", 
+                "text": "DOGE to the moon", 
+                "createdAt": "Tue Jan 24 08:44:50 +0000 2023",
+                "author": {"userName": "doge_fan", "id": "doge_fan_id"}
+            }]
         }
         
         with patch('handlers.tweet.logger') as mock_logger:
@@ -84,7 +100,7 @@ class TestTweetHandler:
             # Verify failure logging
             mock_logger.warning.assert_called_once_with(
                 "Failed to publish tweet event to RabbitMQ",
-                rule_id="fail_rule"
+                tweet_data=mock_messenger.publish.call_args[0][0]
             )
     
     def test_handle_tweet_event_exception_handling(self):
@@ -97,7 +113,12 @@ class TestTweetHandler:
             "rule_id": "error_rule",
             "rule_tag": "litecoin",
             "timestamp": 1674567890000,
-            "tweets": [{"id": "999", "text": "LTC update", "author": "ltc_trader"}]
+            "tweets": [{
+                "id": "999", 
+                "text": "LTC update", 
+                "createdAt": "Tue Jan 24 08:44:50 +0000 2023",
+                "author": {"userName": "ltc_trader", "id": "ltc_trader_id"}
+            }]
         }
         
         with patch('handlers.tweet.logger') as mock_logger:
@@ -108,8 +129,7 @@ class TestTweetHandler:
             mock_logger.error.assert_called_once_with(
                 "Error publishing tweet event to RabbitMQ",
                 error="Connection error",
-                rule_id="error_rule",
-                tweet_count=1
+                tweet_data=mock_messenger.publish.call_args[0][0]
             )
     
     def test_handle_tweet_event_time_calculations(self):
@@ -125,7 +145,12 @@ class TestTweetHandler:
             "rule_id": "time_rule",
             "rule_tag": "timing",
             "timestamp": test_timestamp,
-            "tweets": [{"id": "time1", "text": "Time test", "author": "timer"}]
+            "tweets": [{
+                "id": "time1", 
+                "text": "Time test", 
+                "createdAt": "Tue Jan 24 08:44:50 +0000 2023",
+                "author": {"userName": "timer", "id": "timer_id"}
+            }]
         }
         
         with patch('time.time', return_value=test_timestamp / 1000 + 300):  # 5 minutes later
@@ -133,10 +158,12 @@ class TestTweetHandler:
             
             call_args = mock_messenger.publish.call_args[0][0]
             
-            # Verify time calculations
-            assert call_args["timestamp"] == test_timestamp
-            assert call_args["time_difference_ms"] == 300000  # 5 minutes in ms
-            assert "5min0sec" in call_args["time_difference_formatted"]
+            # Verify TweetOutput object contains expected data
+            assert call_args.createdAt == 1674549890  # Unix timestamp converted from createdAt string
+            assert call_args.text == "Time test"
+            assert call_args.media == []
+            assert call_args.links == []
+            assert call_args.data_source.author_name == "timer"
     
     def test_handle_tweet_event_empty_tweets(self):
         """Test handling of empty tweets list."""
@@ -151,8 +178,8 @@ class TestTweetHandler:
             "tweets": []
         }
         
+        # With empty tweets list, the handler simply doesn't iterate
         handle_tweet_event(tweet_data, mock_messenger)
         
-        call_args = mock_messenger.publish.call_args[0][0]
-        assert call_args["tweet_count"] == 0
-        assert call_args["tweets"] == []
+        # Should not call publish due to empty tweets list
+        mock_messenger.publish.assert_not_called()

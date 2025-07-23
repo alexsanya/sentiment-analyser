@@ -4,12 +4,14 @@ import json
 import os
 import time
 from collections import deque
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Union
 import pika
 from pika.adapters.blocking_connection import BlockingChannel
 from pika.connection import Connection
+from pydantic import ValidationError
 from logging_config import get_logger
 from message_buffer import MessageBuffer
+from schemas import TweetOutput
 
 logger = get_logger(__name__)
 
@@ -140,11 +142,15 @@ class MQMessenger:
             if not self.is_connected():
                 self._create_connection()
             
+            # Declare connection_events queue for test messages
+            connection_events_queue = "connection_events"
+            self._channel.queue_declare(queue=connection_events_queue, durable=True)
+            
             # Test publish a small message to validate connection
             test_message = {"_test": "connection_validation"}
             self._channel.basic_publish(
                 exchange='',
-                routing_key=self.queue_name,
+                routing_key=connection_events_queue,
                 body=json.dumps(test_message),
                 properties=pika.BasicProperties(delivery_mode=2)
             )
@@ -164,11 +170,11 @@ class MQMessenger:
             self._channel = self._connection.channel()
             self._channel.queue_declare(queue=self.queue_name, durable=True)
     
-    def publish(self, message: Dict[str, Any]) -> bool:
+    def publish(self, message: Union[Dict[str, Any], TweetOutput]) -> bool:
         """Publish JSON message to RabbitMQ queue with automatic buffering on failure.
         
         Args:
-            message: Dictionary to be serialized as JSON and published
+            message: Dictionary or TweetOutput object to be serialized as JSON and published
             
         Returns:
             bool: True if message was published successfully, False otherwise
@@ -176,10 +182,26 @@ class MQMessenger:
         Raises:
             ValueError: If message is invalid or too large
         """
-        # Input validation
-        if not isinstance(message, dict):
-            raise ValueError("Message must be a dictionary")
+        # Input validation and type conversion
+        if isinstance(message, TweetOutput):
+            # Convert TweetOutput to dictionary
+            message = message.model_dump()
+        elif isinstance(message, dict):
+            # Check for empty dictionary first
+            if not message:
+                raise ValueError("Message cannot be empty")
+            
+            # Validate dictionary against TweetOutput schema
+            try:
+                validated_message = TweetOutput(**message)
+                # Convert back to dict for JSON serialization
+                message = validated_message.model_dump()
+            except ValidationError as e:
+                raise ValueError(f"Message does not match expected schema: {str(e)}")
+        else:
+            raise ValueError("Message must be a dictionary or TweetOutput object")
         
+        # Final check for empty message after processing
         if not message:
             raise ValueError("Message cannot be empty")
         
@@ -314,10 +336,22 @@ class MQMessenger:
             buffer_timestamp = buffered_message["timestamp"]
             
             try:
-                # Try to publish the original message directly (bypassing buffer logic)
+                # Validate message against schema before publishing
+                try:
+                    validated_message = TweetOutput(**original_message)
+                    validated_dict = validated_message.model_dump()
+                except ValidationError as e:
+                    logger.warning(
+                        "Skipping buffered message due to schema validation failure",
+                        error=str(e),
+                        buffer_age_seconds=round(time.time() - buffer_timestamp, 2)
+                    )
+                    continue
+                
+                # Try to publish the validated message directly (bypassing buffer logic)
                 self._ensure_connection()
                 
-                json_message = json.dumps(original_message, default=str)
+                json_message = json.dumps(validated_dict, default=str)
                 self._channel.basic_publish(
                     exchange='',
                     routing_key=self.queue_name,

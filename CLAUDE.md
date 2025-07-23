@@ -13,6 +13,7 @@ This is a news-powered trading system that monitors Twitter/X feeds in real-time
 - **Key Dependencies**: 
   - `websocket-client` for real-time Twitter API connections
   - `pika` for RabbitMQ message publishing and connection monitoring
+  - `pydantic` for data validation and schema enforcement
   - `dotenv` for environment variable management
   - `structlog` for structured logging with JSON output
 - **Testing**: 
@@ -62,6 +63,12 @@ uv run pytest tests/test_rabbitmq_monitor.py tests/test_mq_messenger.py tests/te
 
 # Run all buffer and messaging tests
 uv run pytest tests/test_message_buffer.py tests/test_mq_messenger.py tests/test_rabbitmq_monitor.py -v
+
+# Run transformation tests
+uv run pytest tests/test_transformation.py
+
+# Run transformation tests with coverage
+uv run pytest tests/test_transformation.py --cov=transformation --cov-report=term-missing
 ```
 
 ## Architecture
@@ -70,7 +77,9 @@ uv run pytest tests/test_message_buffer.py tests/test_mq_messenger.py tests/test
 
 - **Main Application** (`main.py`): Application orchestration and dependency injection coordination
 - **WebSocket Manager** (`websocket_manager.py`): Connection lifecycle management with integrated message processing and MQMessenger dependency injection
-- **MQ Messenger** (`mq_messenger.py`): RabbitMQ message publishing service injected into WebSocket manager
+- **MQ Messenger** (`mq_messenger.py`): RabbitMQ message publishing service with schema validation and automatic buffering
+- **Data Transformation** (`transformation.py`): Tweet data standardization and format conversion pipeline
+- **Schema Validation** (`schemas.py`): Pydantic models for data validation and consistency
 - **RabbitMQ Monitor** (`rabbitmq_monitor.py`): Automatic connection monitoring with health checks and reconnection logic
 - **Event Handlers** (`handlers/` package): Modular message and lifecycle event processing
 - **Structured Logging** (`logging_config.py`): Centralized logging configuration
@@ -80,7 +89,7 @@ uv run pytest tests/test_message_buffer.py tests/test_mq_messenger.py tests/test
 **Message Handlers** (process WebSocket message content):
 - `handlers/connected.py`: Connection establishment confirmation
 - `handlers/ping.py`: Ping events with timestamp analysis and latency monitoring
-- `handlers/tweet.py`: Tweet events with metadata extraction and processing
+- `handlers/tweet.py`: Tweet events with transformation pipeline and schema validation
 - `handlers/unknown.py`: Unknown/unexpected message types
 
 **Lifecycle Handlers** (manage WebSocket connection events):
@@ -94,20 +103,25 @@ uv run pytest tests/test_message_buffer.py tests/test_mq_messenger.py tests/test
 ```
 ├── main.py                    # Application entry point with dependency injection
 ├── websocket_manager.py       # WebSocket lifecycle management with integrated message handling
-├── mq_messenger.py            # RabbitMQ message publishing service with automatic buffering
+├── mq_messenger.py            # RabbitMQ message publishing service with schema validation and buffering
 ├── message_buffer.py          # Thread-safe FIFO message buffer for RabbitMQ outages
+├── transformation.py          # Tweet data transformation and standardization pipeline
+├── schemas.py                 # Pydantic models for data validation and schema enforcement
 ├── rabbitmq_monitor.py        # RabbitMQ connection monitoring with automatic reconnection
 ├── logging_config.py          # Structured logging configuration
 ├── handlers/                  # Event and message handlers package
 │   ├── __init__.py           # Package exports
 │   ├── connected.py          # Connection establishment handler
 │   ├── ping.py               # Ping message handler with timing analysis
-│   ├── tweet.py              # Tweet message handler with metadata extraction
+│   ├── tweet.py              # Tweet message handler with transformation pipeline integration
 │   ├── unknown.py            # Unknown message type handler
 │   ├── error.py              # WebSocket error handler with diagnostics
 │   ├── close.py              # Connection close handler with status mapping
 │   └── open.py               # Connection open handler
 ├── tests/                     # Comprehensive test suite
+│   ├── test_transformation.py # Transformation pipeline tests
+│   └── ...                   # Other test files
+├── tweet-sample.json         # Sample tweet data for testing and development
 └── logs/                      # Log files (auto-created)
 ```
 
@@ -154,10 +168,12 @@ MESSAGE_BUFFER_SIZE=10
 
 - **Connection Management** (`websocket_manager.py`): Automatic reconnection on failures with retry logic and integrated message handling
 - **Dependency Injection** (`main.py`): MQMessenger instances injected into WebSocketManager for clean separation of concerns
-- **Message Publishing** (`mq_messenger.py`): RabbitMQ service with connection management, message validation, and automatic buffering
+- **Message Publishing** (`mq_messenger.py`): RabbitMQ service with connection management, schema validation, and automatic buffering
+- **Data Transformation** (`transformation.py`): Tweet data standardization with datetime parsing and URL extraction
+- **Schema Validation** (`schemas.py`): Pydantic models ensuring data consistency and type safety
 - **Message Buffer** (`message_buffer.py`): Thread-safe FIFO buffer system for storing messages during RabbitMQ outages
 - **Event Processing** (`handlers/` package): Modular real-time message and event processing
-- **Message Analysis** (`handlers/ping.py`, `handlers/tweet.py`): Timestamp analysis and metadata extraction
+- **Message Analysis** (`handlers/ping.py`, `handlers/tweet.py`): Timestamp analysis and transformation pipeline processing
 - **Error Diagnosis** (`handlers/error.py`): Specialized error handling with diagnostic suggestions
 - **Structured Logging**: JSON-formatted logs separated by level (error.log, warning.log, app.log)
 - **Graceful Shutdown**: Signal handling with proper WebSocket and MQ connection cleanup
@@ -243,6 +259,61 @@ The buffer provides comprehensive status information via `get_buffer_status()`:
 - **newest_message_timestamp**: Timestamp of newest buffered message
 - **oldest_message_age_seconds**: Age of oldest message in seconds
 
+## Data Transformation and Schema Validation
+
+The application includes a comprehensive data transformation and validation system to ensure consistent data structure and reliability across the pipeline.
+
+### Schema Enforcement Features
+
+- **Pydantic Models**: Type-safe data validation using Pydantic with automatic type coercion and validation
+- **Data Source Attribution**: Structured tracking of message origin, author information, and platform source
+- **Field Validation**: Custom validators for text content, URL lists, and data integrity
+- **Fallback Values**: Default values for missing or invalid fields to ensure data consistency
+- **Type Safety**: Automatic type checking and conversion with comprehensive error handling
+
+### Transformation Pipeline
+
+The transformation system standardizes tweet data format and extracts key information:
+
+1. **Datetime Standardization**: Converts Twitter datetime strings (`"Sat Jul 19 22:54:07 +0000 2025"`) to Unix timestamps
+2. **URL Processing**: Extracts and processes markdown-style links and media URLs from tweet entities
+3. **Content Extraction**: Cleans and validates tweet text content with proper encoding handling
+4. **Media Handling**: Processes extended entities for media URLs (images, videos) with HTTPS enforcement
+5. **Author Attribution**: Maps tweet author information including username and user ID
+
+### Schema Structure
+
+**TweetOutput Schema**:
+```python
+{
+    "data_source": {
+        "name": "Twitter",           # Platform identifier
+        "author_name": "username",   # Tweet author username
+        "author_id": "12345"         # Tweet author user ID
+    },
+    "createdAt": 1721765647,         # Unix timestamp
+    "text": "Tweet content...",       # Processed tweet text
+    "media": ["https://..."],        # Media URLs array
+    "links": ["https://..."]         # External links array
+}
+```
+
+### Integration with Message Publishing
+
+- **Automatic Validation**: All tweet messages are validated against schema before RabbitMQ publishing
+- **Error Handling**: Validation errors are logged with detailed diagnostic information
+- **Fallback Processing**: Invalid data is processed with fallback values rather than being dropped
+- **MQ Integration**: Seamless integration with MQMessenger for validated message publishing
+
+### Transformation Testing
+
+The transformation system includes comprehensive test coverage:
+- **Schema Validation**: Tests for all field types and validation rules
+- **Edge Cases**: Handling of malformed data, missing fields, and invalid formats
+- **Datetime Processing**: Validation of Twitter datetime parsing with timezone handling
+- **URL Extraction**: Testing of markdown link processing and media URL handling
+- **Integration Testing**: End-to-end validation with tweet handler pipeline
+
 ## Testing
 
 The project includes comprehensive unit tests for the WebSocket management functionality:
@@ -263,6 +334,7 @@ tests/
 ├── test_mq_messenger_reconnect.py # MQMessenger reconnection tests
 ├── test_main_rabbitmq.py          # Main application RabbitMQ integration tests
 ├── test_message_buffer.py         # MessageBuffer comprehensive test suite (27 tests)
+├── test_transformation.py         # Data transformation pipeline tests (27 tests)
 └── test_tweet_handler.py          # Tweet handler with MQ integration tests
 
 test_websocket_manager.py          # Main test suite entry point
@@ -277,6 +349,7 @@ conftest.py                        # Root-level fixtures for main runner
 - **Error Handling Tests**: Comprehensive error scenarios, exception types, retry mechanisms, finally block cleanup
 - **Integration Tests**: End-to-end workflows, complete lifecycle management, signal-to-shutdown sequences
 - **RabbitMQ Monitor Tests**: Connection monitoring, health checks, automatic reconnection, failure tracking, thread management, environment configuration
+- **Transformation Tests**: Data transformation pipeline, schema validation, datetime parsing, URL extraction, edge cases
 
 ### Test Execution Options
 ```bash
@@ -294,6 +367,7 @@ uv run pytest tests/test_websocket_lifecycle.py -v
 uv run pytest tests/test_error_handling.py -v
 uv run pytest tests/test_integration.py -v
 uv run pytest tests/test_rabbitmq_monitor.py -v
+uv run pytest tests/test_transformation.py -v
 
 # Run specific test classes
 uv run pytest tests/test_connection_management.py::TestConnectionManagement -v
@@ -302,6 +376,7 @@ uv run pytest tests/test_error_handling.py::TestErrorHandling -v
 uv run pytest tests/test_integration.py::TestIntegration -v
 uv run pytest tests/test_rabbitmq_monitor.py::TestRabbitMQConnectionMonitor -v
 uv run pytest tests/test_rabbitmq_monitor.py::TestRabbitMQMonitorEnvironmentIntegration -v
+uv run pytest tests/test_transformation.py::TestTransformation -v
 
 # Run with coverage reporting
 uv run pytest test_websocket_manager.py --cov=websocket_manager --cov-report=term-missing
@@ -316,7 +391,7 @@ uv run pytest test_websocket_manager.py --cov=websocket_manager --cov-report=htm
 ### Test Coverage
 - **WebSocket Manager Coverage**: 92% of websocket_manager.py (70/70 tests passing across all components)
 - **RabbitMQ Monitor Coverage**: Comprehensive test coverage with 23 test cases covering all monitor functionality
-- **Tested Components**: WebSocketManager initialization, signal handling, connection management, WebSocket lifecycle, comprehensive error handling, integration workflows, MQMessenger functionality, RabbitMQ connection monitoring, and tweet handler operations
+- **Tested Components**: WebSocketManager initialization, signal handling, connection management, WebSocket lifecycle, comprehensive error handling, integration workflows, MQMessenger functionality, RabbitMQ connection monitoring, data transformation pipeline, schema validation, and tweet handler operations
 - **Connection Management Tests** (8 tests): Connection lifecycle, retry logic, error handling, shutdown coordination
   - Successful WebSocket connection establishment
   - Connection retry logic with 5-second delays  
@@ -374,6 +449,15 @@ uv run pytest test_websocket_manager.py --cov=websocket_manager --cov-report=htm
   - Buffer status reporting with comprehensive state information
   - Integration with MQMessenger for automatic message buffering on RabbitMQ failures
   - Flush operations with partial failure handling and message preservation
+- **Transformation Tests** (27 tests): Comprehensive data transformation pipeline testing
+  - Tweet data transformation with schema validation
+  - Datetime parsing from Twitter format to Unix timestamps
+  - URL extraction from markdown-style links and media entities
+  - Data source attribution and author information mapping
+  - Schema validation with Pydantic models and error handling
+  - Edge cases including malformed data, missing fields, and invalid formats
+  - Integration with tweet handler for end-to-end processing
+  - Fallback values and data consistency validation
 
 ## Logging
 
