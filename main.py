@@ -47,11 +47,14 @@ def initialize_rabbitmq() -> MQMessenger:
         )
         raise SystemExit(1)
 
-
-
-
-# Message handling is now integrated into WebSocketManager class
-
+def initialize_rabbitmq_monitor(mq_messenger: MQMessenger) -> Optional[RabbitMQConnectionMonitor]:
+    if os.getenv("RABBITMQ_MONITOR_ENABLED", "true").lower() == "true":
+        connection_monitor = RabbitMQConnectionMonitor.from_env(mq_messenger)
+        connection_monitor.start()
+        logger.info("RabbitMQ connection monitoring enabled")
+    else:
+        logger.info("RabbitMQ connection monitoring disabled")
+    return connection_monitor
 
 # Main function
 def main(x_api_key: str) -> None:
@@ -62,13 +65,7 @@ def main(x_api_key: str) -> None:
     mq_messenger = initialize_rabbitmq()
     
     # Initialize RabbitMQ connection monitor
-    connection_monitor: Optional[RabbitMQConnectionMonitor] = None
-    if os.getenv("RABBITMQ_MONITOR_ENABLED", "true").lower() == "true":
-        connection_monitor = RabbitMQConnectionMonitor.from_env(mq_messenger)
-        connection_monitor.start()
-        logger.info("RabbitMQ connection monitoring enabled")
-    else:
-        logger.info("RabbitMQ connection monitoring disabled")
+    connection_monitor: Optional[RabbitMQConnectionMonitor] = initialize_rabbitmq_monitor(mq_messenger)
     
     # Create WebSocket manager with callback functions and MQ messenger
     ws_manager = WebSocketManager(None, on_error, on_close, on_open, mq_messenger)
