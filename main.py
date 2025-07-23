@@ -1,17 +1,12 @@
-import traceback
-import websocket
-import json
 import os
 import signal
-from functools import partial
+from typing import Any, Optional
 from dotenv import load_dotenv
 from logging_config import setup_logging, get_logger
 from websocket_manager import WebSocketManager
+from mq_messenger import MQMessenger
+from rabbitmq_monitor import RabbitMQConnectionMonitor
 from handlers import (
-    handle_connected_event,
-    handle_ping_event,
-    handle_tweet_event,
-    handle_unknown_event,
     on_error,
     on_close,
     on_open
@@ -21,46 +16,77 @@ from handlers import (
 setup_logging()  # Auto-detects environment
 logger = get_logger(__name__)
 
+# Removed global MQMessenger instance - now using dependency injection
 
 
-
-# Message handling callback
-def on_message(ws: websocket.WebSocketApp, message: str) -> None:
-    """Main message dispatcher that routes to appropriate handlers based on event type."""
+def initialize_rabbitmq() -> MQMessenger:
+    """Initialize and test RabbitMQ connection at startup.
+    
+    Returns:
+        MQMessenger: Successfully connected and validated MQMessenger instance
+        
+    Raises:
+        SystemExit: If RabbitMQ connection cannot be established or validated
+    """
     try:
-        logger.info("Message received", message_preview=message[:100] + "..." if len(message) > 100 else message)
-        # Convert to JSON
-        result_json = json.loads(message)
-        event_type = result_json.get("event_type")
+        logger.info("Initializing RabbitMQ connection...")
+        messenger = MQMessenger.from_env(connect_on_init=True)
         
-        # Route to appropriate handler based on event type
-        if event_type == "connected":
-            handle_connected_event(result_json)
-        elif event_type == "ping":
-            handle_ping_event(result_json)
-        elif event_type == "tweet":
-            handle_tweet_event(result_json)
-        else:
-            handle_unknown_event(event_type, result_json)
+        # Test the connection
+        if not messenger.test_connection():
+            logger.error("RabbitMQ connection test failed - shutting down")
+            raise Exception("RabbitMQ connection validation failed")
         
-    except json.JSONDecodeError as e:
-        logger.error("JSON parsing error", error=str(e), traceback=traceback.format_exc(), message=message)
+        logger.info("RabbitMQ connection validated successfully")
+        return messenger
+        
     except Exception as e:
-        logger.error("Error processing message", error=str(e), traceback=traceback.format_exc(), message=message)
+        logger.error(
+            "Failed to establish RabbitMQ connection at startup",
+            error=str(e)
+        )
+        raise SystemExit(1)
 
-
+def initialize_rabbitmq_monitor(mq_messenger: MQMessenger) -> Optional[RabbitMQConnectionMonitor]:
+    if os.getenv("RABBITMQ_MONITOR_ENABLED", "true").lower() == "true":
+        connection_monitor = RabbitMQConnectionMonitor.from_env(mq_messenger)
+        connection_monitor.start()
+        logger.info("RabbitMQ connection monitoring enabled")
+    else:
+        logger.info("RabbitMQ connection monitoring disabled")
+    return connection_monitor
 
 # Main function
 def main(x_api_key: str) -> None:
-    # Create WebSocket manager with callback functions
-    ws_manager = WebSocketManager(on_message, on_error, on_close, on_open)
-    
-    # Register signal handler for graceful shutdown using the manager
-    signal.signal(signal.SIGINT, partial(ws_manager._signal_handler))
-    logger.info("Signal handler registered for graceful shutdown")
-    
     environment = os.getenv("ENVIRONMENT", "development")
     logger.info("Starting news-powered trading system", environment=environment)
+    
+    # Initialize and test RabbitMQ connection at startup
+    mq_messenger = initialize_rabbitmq()
+    
+    # Initialize RabbitMQ connection monitor
+    connection_monitor: Optional[RabbitMQConnectionMonitor] = initialize_rabbitmq_monitor(mq_messenger)
+    
+    # Create WebSocket manager with callback functions and MQ messenger
+    ws_manager = WebSocketManager(None, on_error, on_close, on_open, mq_messenger)
+    
+    # Register signal handler for graceful shutdown using the manager
+    def shutdown_handler(signum: int, frame: Any) -> None:
+        logger.info("Shutdown signal received, cleaning up...")
+        
+        # Stop connection monitor first
+        if connection_monitor:
+            connection_monitor.stop()
+        
+        # Then shutdown WebSocket manager
+        ws_manager._signal_handler(signum, frame)
+        
+        # Finally close MQ connection
+        if mq_messenger:
+            mq_messenger.close()
+    
+    signal.signal(signal.SIGINT, shutdown_handler)
+    logger.info("Signal handler registered for graceful shutdown")
     
     url = "wss://ws.twitterapi.io/twitter/tweet/websocket"
     headers = {"x-api-key": x_api_key}
@@ -69,6 +95,12 @@ def main(x_api_key: str) -> None:
     ws_manager.connect(url, headers)
     
     logger.info("Application shutting down")
+    
+    # Cleanup resources
+    if connection_monitor:
+        connection_monitor.stop()
+    if mq_messenger:
+        mq_messenger.close()
 
 if __name__ == "__main__":
     load_dotenv()
