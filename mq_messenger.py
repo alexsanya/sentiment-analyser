@@ -4,7 +4,7 @@ import json
 import os
 import time
 from collections import deque
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Union
 import pika
 from pika.adapters.blocking_connection import BlockingChannel
 from pika.connection import Connection
@@ -166,11 +166,11 @@ class MQMessenger:
             self._channel = self._connection.channel()
             self._channel.queue_declare(queue=self.queue_name, durable=True)
     
-    def publish(self, message: Dict[str, Any]) -> bool:
+    def publish(self, message: Union[Dict[str, Any], TweetOutput]) -> bool:
         """Publish JSON message to RabbitMQ queue with automatic buffering on failure.
         
         Args:
-            message: Dictionary to be serialized as JSON and published
+            message: Dictionary or TweetOutput object to be serialized as JSON and published
             
         Returns:
             bool: True if message was published successfully, False otherwise
@@ -178,20 +178,28 @@ class MQMessenger:
         Raises:
             ValueError: If message is invalid or too large
         """
-        # Input validation
-        if not isinstance(message, dict):
-            raise ValueError("Message must be a dictionary")
+        # Input validation and type conversion
+        if isinstance(message, TweetOutput):
+            # Convert TweetOutput to dictionary
+            message = message.model_dump()
+        elif isinstance(message, dict):
+            # Check for empty dictionary first
+            if not message:
+                raise ValueError("Message cannot be empty")
+            
+            # Validate dictionary against TweetOutput schema
+            try:
+                validated_message = TweetOutput(**message)
+                # Convert back to dict for JSON serialization
+                message = validated_message.model_dump()
+            except ValidationError as e:
+                raise ValueError(f"Message does not match expected schema: {str(e)}")
+        else:
+            raise ValueError("Message must be a dictionary or TweetOutput object")
         
+        # Final check for empty message after processing
         if not message:
             raise ValueError("Message cannot be empty")
-        
-        # Validate message against TweetOutput schema
-        try:
-            validated_message = TweetOutput(**message)
-            # Convert back to dict for JSON serialization
-            message = validated_message.model_dump()
-        except ValidationError as e:
-            raise ValueError(f"Message does not match expected schema: {str(e)}")
         
         # Pre-validate message size by serializing to JSON
         try:

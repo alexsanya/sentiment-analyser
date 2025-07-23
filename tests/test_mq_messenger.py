@@ -310,6 +310,45 @@ class TestMQMessengerPublish:
         
         with pytest.raises(ValueError, match="Message does not match expected schema"):
             messenger.publish(invalid_message)
+    
+    @patch("pika.BlockingConnection")
+    def test_publish_with_tweetoutput_object(self, mock_connection):
+        """Test publish accepts TweetOutput objects and converts them to dictionaries."""
+        from schemas import TweetOutput
+        
+        mock_conn = Mock()
+        mock_channel = Mock()
+        mock_conn.channel.return_value = mock_channel
+        mock_conn.is_closed = False
+        mock_channel.is_closed = False
+        mock_connection.return_value = mock_conn
+        
+        messenger = MQMessenger()
+        
+        # Create a TweetOutput object
+        tweet_output = TweetOutput(
+            timestamp=1642743600,
+            text="Test tweet content",
+            media=["https://example.com/image.jpg"],
+            links=["https://example.com/article"]
+        )
+        
+        # Should successfully publish without validation errors
+        result = messenger.publish(tweet_output)
+        
+        assert result is True
+        mock_channel.basic_publish.assert_called_once()
+        
+        # Verify the published message was converted to dictionary format
+        call_args = mock_channel.basic_publish.call_args
+        published_body = call_args[1]['body']
+        import json
+        published_data = json.loads(published_body)
+        
+        assert published_data['timestamp'] == 1642743600
+        assert published_data['text'] == "Test tweet content"
+        assert published_data['media'] == ["https://example.com/image.jpg"]
+        assert published_data['links'] == ["https://example.com/article"]
 
 
 class TestMQMessengerContextManager:
