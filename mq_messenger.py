@@ -229,6 +229,37 @@ class MQMessenger:
             not self._channel.is_closed
         )
     
+    def reconnect(self) -> bool:
+        """Reconnect to RabbitMQ server by closing and re-establishing connection.
+        
+        Returns:
+            bool: True if reconnection was successful, False otherwise
+        """
+        logger.info("Attempting to reconnect to RabbitMQ")
+        
+        try:
+            # Clean up existing connection
+            self._cleanup_connection()
+            
+            # Establish new connection
+            self._create_connection()
+            
+            # Verify the new connection works
+            if self.is_connected():
+                logger.info("RabbitMQ reconnection successful")
+                return True
+            else:
+                logger.error("RabbitMQ reconnection failed - connection not established")
+                return False
+                
+        except Exception as e:
+            logger.error(
+                "RabbitMQ reconnection failed",
+                error=str(e),
+                error_type=type(e).__name__
+            )
+            return False
+    
     def close(self) -> None:
         """Close connection and clean up resources."""
         logger.info("Closing MQMessenger connection")

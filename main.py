@@ -1,10 +1,11 @@
 import os
 import signal
-from typing import Any
+from typing import Any, Optional
 from dotenv import load_dotenv
 from logging_config import setup_logging, get_logger
 from websocket_manager import WebSocketManager
 from mq_messenger import MQMessenger
+from rabbitmq_monitor import RabbitMQConnectionMonitor
 from handlers import (
     on_error,
     on_close,
@@ -60,13 +61,30 @@ def main(x_api_key: str) -> None:
     # Initialize and test RabbitMQ connection at startup
     mq_messenger = initialize_rabbitmq()
     
+    # Initialize RabbitMQ connection monitor
+    connection_monitor: Optional[RabbitMQConnectionMonitor] = None
+    if os.getenv("RABBITMQ_MONITOR_ENABLED", "true").lower() == "true":
+        connection_monitor = RabbitMQConnectionMonitor.from_env(mq_messenger)
+        connection_monitor.start()
+        logger.info("RabbitMQ connection monitoring enabled")
+    else:
+        logger.info("RabbitMQ connection monitoring disabled")
+    
     # Create WebSocket manager with callback functions and MQ messenger
     ws_manager = WebSocketManager(None, on_error, on_close, on_open, mq_messenger)
     
     # Register signal handler for graceful shutdown using the manager
     def shutdown_handler(signum: int, frame: Any) -> None:
         logger.info("Shutdown signal received, cleaning up...")
+        
+        # Stop connection monitor first
+        if connection_monitor:
+            connection_monitor.stop()
+        
+        # Then shutdown WebSocket manager
         ws_manager._signal_handler(signum, frame)
+        
+        # Finally close MQ connection
         if mq_messenger:
             mq_messenger.close()
     
@@ -80,6 +98,10 @@ def main(x_api_key: str) -> None:
     ws_manager.connect(url, headers)
     
     logger.info("Application shutting down")
+    
+    # Cleanup resources
+    if connection_monitor:
+        connection_monitor.stop()
     if mq_messenger:
         mq_messenger.close()
 
