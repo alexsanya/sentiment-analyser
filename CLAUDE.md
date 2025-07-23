@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a news-powered trading system that monitors Twitter/X feeds in real-time via WebSocket connections. The application connects to Twitter's streaming API to capture tweets and their metadata for sentiment analysis and trading signal generation.
+This is the news watcher microservice, the first component in a multi-module real-time news monitoring and trading signal generation system. The application connects to Twitter's streaming API via WebSocket to capture tweets and their metadata, which are then published to RabbitMQ queues for downstream sentiment analysis and trading signal generation services.
 
 ## Technology Stack
 
@@ -20,6 +20,11 @@ This is a news-powered trading system that monitors Twitter/X feeds in real-time
   - `pytest` for unit testing framework
   - `pytest-mock` for mocking functionality
   - `pytest-cov` for coverage reporting
+- **Containerization**:
+  - `Docker` for containerization with Python 3.12 slim image
+  - `docker-compose` for multi-service orchestration
+  - Custom bridge network for service communication
+  - Volume mounts for data persistence and log access
 
 ## Development Commands
 
@@ -69,6 +74,32 @@ uv run pytest tests/test_transformation.py
 
 # Run transformation tests with coverage
 uv run pytest tests/test_transformation.py --cov=transformation --cov-report=term-missing
+
+# Docker Development Commands
+
+# Build and start all services (RabbitMQ + News Watcher)
+docker-compose up -d
+
+# View logs for news watcher service
+docker-compose logs -f news-watcher
+
+# View logs for RabbitMQ service
+docker-compose logs -f rabbitmq
+
+# View logs for all services
+docker-compose logs -f
+
+# Rebuild and restart services after code changes
+docker-compose up -d --build
+
+# Stop all services
+docker-compose down
+
+# Stop services and remove volumes (clean slate)
+docker-compose down -v
+
+# Access RabbitMQ Management UI
+# http://localhost:15672 (admin/changeme)
 ```
 
 ## Architecture
@@ -162,6 +193,72 @@ Example `.env` configuration:
 # Message Buffer Configuration
 MESSAGE_BUFFER_ENABLED=true
 MESSAGE_BUFFER_SIZE=10
+```
+
+## Docker Containerization
+
+The application supports Docker containerization with multi-service orchestration via docker-compose.
+
+### Docker Architecture
+
+- **news-watcher**: Main application container running the WebSocket news monitoring service
+- **rabbitmq**: RabbitMQ message broker with management UI
+- **trading_network**: Custom bridge network for secure inter-service communication
+- **Volume mounts**: Persistent data storage and log access from host
+
+### Docker Services
+
+#### News Watcher Service
+- **Base Image**: Python 3.12 slim for optimal performance
+- **Package Manager**: UV for fast dependency resolution
+- **Health Checks**: Automated container health monitoring
+- **Restart Policy**: Automatic restart on failures
+- **Network**: Connected to trading_network for RabbitMQ communication
+
+#### RabbitMQ Service
+- **Image**: rabbitmq:3.13-management with web UI
+- **Ports**: 5672 (AMQP), 15672 (Management UI)
+- **Persistence**: Named volume for message durability
+- **Health Checks**: Port connectivity validation
+- **Credentials**: Configurable via environment variables
+
+### Container Networking
+
+- **Internal Communication**: news-watcher connects to rabbitmq:5672
+- **External Access**: RabbitMQ Management UI at localhost:15672
+- **Service Discovery**: Automatic DNS resolution between containers
+- **Network Isolation**: Services isolated on custom bridge network
+
+### Environment Variable Integration
+
+All configuration from `.env` file is automatically passed to containers:
+- Twitter API credentials
+- RabbitMQ connection settings (host automatically set to 'rabbitmq')
+- Monitoring and buffer configuration
+- Application environment settings
+
+### Docker Development Workflow
+
+```bash
+# Initial setup - copy environment template
+cp .env.example .env
+# Edit .env with your configuration
+
+# Start all services
+docker-compose up -d
+
+# Monitor application logs
+docker-compose logs -f news-watcher
+
+# Access RabbitMQ Management UI
+# Navigate to http://localhost:15672
+# Default credentials: admin/changeme (configurable via .env)
+
+# Rebuild after code changes
+docker-compose up -d --build
+
+# Clean shutdown
+docker-compose down
 ```
 
 ## Key Components

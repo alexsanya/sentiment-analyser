@@ -22,11 +22,11 @@ services:
     networks:
       - trading_network
 
-  news-trading-app:
+  news-watcher:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: news-trading-app
+    container_name: news-watcher
     depends_on:
       rabbitmq:
         condition: service_healthy
