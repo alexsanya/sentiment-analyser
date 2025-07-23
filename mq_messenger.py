@@ -2,11 +2,14 @@
 
 import json
 import os
-from typing import Dict, Any, Optional
+import time
+from collections import deque
+from typing import Dict, Any, Optional, List
 import pika
 from pika.adapters.blocking_connection import BlockingChannel
 from pika.connection import Connection
 from logging_config import get_logger
+from message_buffer import MessageBuffer
 
 logger = get_logger(__name__)
 
@@ -21,7 +24,8 @@ class MQMessenger:
         queue_name: str = "tweet_events",
         username: Optional[str] = None,
         password: Optional[str] = None,
-        connect_on_init: bool = False
+        connect_on_init: bool = False,
+        message_buffer: Optional[MessageBuffer] = None
     ) -> None:
         """Initialize MQMessenger with connection parameters.
         
@@ -32,6 +36,7 @@ class MQMessenger:
             username: Optional username for authentication
             password: Optional password for authentication
             connect_on_init: If True, establish connection immediately
+            message_buffer: Optional MessageBuffer instance for storing messages during outages
         """
         self.host = host
         self.port = port
@@ -40,13 +45,16 @@ class MQMessenger:
         self.password = password
         self._connection: Optional[Connection] = None
         self._channel: Optional[BlockingChannel] = None
+        self.message_buffer = message_buffer if message_buffer is not None else MessageBuffer.from_env()
         
         logger.info(
             "MQMessenger initialized",
             host=self.host,
             port=self.port,
             queue_name=self.queue_name,
-            authenticated=bool(self.username)
+            authenticated=bool(self.username),
+            buffer_enabled=self.message_buffer.enabled,
+            buffer_size=self.message_buffer.max_size
         )
         
         if connect_on_init:
@@ -157,7 +165,7 @@ class MQMessenger:
             self._channel.queue_declare(queue=self.queue_name, durable=True)
     
     def publish(self, message: Dict[str, Any]) -> bool:
-        """Publish JSON message to RabbitMQ queue.
+        """Publish JSON message to RabbitMQ queue with automatic buffering on failure.
         
         Args:
             message: Dictionary to be serialized as JSON and published
@@ -209,11 +217,25 @@ class MQMessenger:
             
         except Exception as e:
             logger.error(
-                "Failed to publish message to RabbitMQ",
+                "Failed to publish message to RabbitMQ, attempting to buffer",
                 error=str(e),
                 queue_name=self.queue_name,
                 message_size=len(str(message))
             )
+            
+            # Try to buffer the message
+            if self.message_buffer.add_message(message):
+                logger.info(
+                    "Message buffered due to RabbitMQ failure",
+                    buffer_size=self.message_buffer.size(),
+                    max_buffer_size=self.message_buffer.max_size
+                )
+            else:
+                logger.warning(
+                    "Failed to buffer message - buffering disabled or message invalid",
+                    buffer_enabled=self.message_buffer.enabled
+                )
+            
             return False
     
     def is_connected(self) -> bool:
@@ -259,6 +281,91 @@ class MQMessenger:
                 error_type=type(e).__name__
             )
             return False
+    
+    def flush_buffer(self) -> int:
+        """Flush all buffered messages to RabbitMQ.
+        
+        Attempts to publish all buffered messages in FIFO order.
+        Successfully published messages are removed from buffer.
+        If any message fails, remaining messages stay in buffer.
+        
+        Returns:
+            int: Number of messages successfully flushed
+        """
+        if self.message_buffer.is_empty():
+            logger.debug("No messages in buffer to flush")
+            return 0
+        
+        flushed_count = 0
+        initial_buffer_size = self.message_buffer.size()
+        
+        logger.info(
+            "Starting buffer flush",
+            buffer_size=initial_buffer_size
+        )
+        
+        # Process messages in FIFO order
+        while not self.message_buffer.is_empty():
+            buffered_message = self.message_buffer.pop_message()
+            if not buffered_message:
+                break
+            
+            original_message = buffered_message["message"]
+            buffer_timestamp = buffered_message["timestamp"]
+            
+            try:
+                # Try to publish the original message directly (bypassing buffer logic)
+                self._ensure_connection()
+                
+                json_message = json.dumps(original_message, default=str)
+                self._channel.basic_publish(
+                    exchange='',
+                    routing_key=self.queue_name,
+                    body=json_message,
+                    properties=pika.BasicProperties(delivery_mode=2)
+                )
+                
+                flushed_count += 1
+                logger.info(
+                    "Buffered message flushed to RabbitMQ",
+                    flushed_count=flushed_count,
+                    buffer_age_seconds=round(time.time() - buffer_timestamp, 2)
+                )
+                
+            except Exception as e:
+                # Re-add message to front of buffer and stop flushing
+                # Using a temporary deque to preserve order
+                temp_buffer = deque([buffered_message])
+                temp_buffer.extend(self.message_buffer._buffer)
+                
+                with self.message_buffer._lock:
+                    self.message_buffer._buffer.clear()
+                    self.message_buffer._buffer.extend(temp_buffer)
+                
+                logger.error(
+                    "Failed to flush buffered message, stopping flush operation",
+                    error=str(e),
+                    flushed_count=flushed_count,
+                    remaining_in_buffer=self.message_buffer.size()
+                )
+                break
+        
+        logger.info(
+            "Buffer flush completed",
+            flushed_count=flushed_count,
+            initial_buffer_size=initial_buffer_size,
+            remaining_in_buffer=self.message_buffer.size()
+        )
+        
+        return flushed_count
+    
+    def get_buffer_status(self) -> Dict[str, Any]:
+        """Get current message buffer status.
+        
+        Returns:
+            Dictionary with comprehensive buffer status information
+        """
+        return self.message_buffer.get_status()
     
     def close(self) -> None:
         """Close connection and clean up resources."""

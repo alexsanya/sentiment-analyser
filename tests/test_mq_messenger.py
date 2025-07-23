@@ -5,6 +5,7 @@ import pytest
 from unittest.mock import Mock, patch, MagicMock
 import pika
 from mq_messenger import MQMessenger
+from message_buffer import MessageBuffer
 
 
 class TestMQMessengerInitialization:
@@ -361,3 +362,239 @@ class TestMQMessengerConnectionMethods:
         result = messenger.test_connection()
         
         assert result is False
+
+
+class TestMQMessengerBufferIntegration:
+    """Test MQMessenger integration with MessageBuffer."""
+    
+    def test_initialization_with_default_buffer(self):
+        """Test MQMessenger initializes with default MessageBuffer."""
+        with patch('message_buffer.MessageBuffer.from_env') as mock_from_env:
+            mock_buffer = Mock()
+            mock_from_env.return_value = mock_buffer
+            
+            messenger = MQMessenger()
+            
+            mock_from_env.assert_called_once()
+            assert messenger.message_buffer == mock_buffer
+    
+    def test_initialization_with_custom_buffer(self):
+        """Test MQMessenger initializes with custom MessageBuffer."""
+        custom_buffer = MessageBuffer(max_size=5, enabled=False)
+        
+        # Test that custom buffer is used correctly
+        messenger = MQMessenger(message_buffer=custom_buffer)
+        
+        assert messenger.message_buffer == custom_buffer
+        assert messenger.message_buffer.max_size == 5
+        assert messenger.message_buffer.enabled is False
+    
+    @patch("pika.BlockingConnection")
+    def test_publish_success_no_buffering(self, mock_connection):
+        """Test successful publish doesn't use buffer."""
+        mock_conn = Mock()
+        mock_channel = Mock()
+        mock_conn.channel.return_value = mock_channel
+        mock_conn.is_closed = False
+        mock_channel.is_closed = False
+        mock_connection.return_value = mock_conn
+        
+        mock_buffer = Mock()
+        messenger = MQMessenger(message_buffer=mock_buffer)
+        messenger._connection = mock_conn
+        messenger._channel = mock_channel
+        
+        test_message = {"event_type": "tweet", "data": "test"}
+        result = messenger.publish(test_message)
+        
+        assert result is True
+        mock_channel.basic_publish.assert_called_once()
+        mock_buffer.add_message.assert_not_called()
+    
+    @patch("pika.BlockingConnection")
+    def test_publish_failure_buffers_message(self, mock_connection):
+        """Test failed publish attempts to buffer message."""
+        mock_connection.side_effect = Exception("Connection failed")
+        
+        mock_buffer = Mock()
+        mock_buffer.add_message.return_value = True
+        mock_buffer.size.return_value = 1
+        mock_buffer.max_size = 10
+        
+        messenger = MQMessenger(message_buffer=mock_buffer)
+        test_message = {"event_type": "tweet", "data": "test"}
+        result = messenger.publish(test_message)
+        
+        assert result is False
+        mock_buffer.add_message.assert_called_once_with(test_message)
+    
+    @patch("pika.BlockingConnection")
+    def test_publish_failure_buffer_disabled(self, mock_connection):
+        """Test failed publish with disabled buffer."""
+        mock_connection.side_effect = Exception("Connection failed")
+        
+        mock_buffer = Mock()
+        mock_buffer.add_message.return_value = False
+        mock_buffer.enabled = False
+        
+        messenger = MQMessenger(message_buffer=mock_buffer)
+        test_message = {"event_type": "tweet", "data": "test"}
+        result = messenger.publish(test_message)
+        
+        assert result is False
+        mock_buffer.add_message.assert_called_once_with(test_message)
+    
+    def test_get_buffer_status(self):
+        """Test get_buffer_status method delegates to buffer."""
+        mock_buffer = Mock()
+        mock_status = {"current_size": 3, "max_size": 10, "is_full": False}
+        mock_buffer.get_status.return_value = mock_status
+        
+        messenger = MQMessenger(message_buffer=mock_buffer)
+        status = messenger.get_buffer_status()
+        
+        assert status == mock_status
+        mock_buffer.get_status.assert_called_once()
+    
+    @patch("pika.BlockingConnection")
+    def test_flush_buffer_empty(self, mock_connection):
+        """Test flush_buffer with empty buffer."""
+        mock_buffer = Mock()
+        mock_buffer.is_empty.return_value = True
+        
+        messenger = MQMessenger(message_buffer=mock_buffer)
+        result = messenger.flush_buffer()
+        
+        assert result == 0
+        mock_buffer.is_empty.assert_called_once()
+        mock_buffer.pop_message.assert_not_called()
+    
+    @patch("pika.BlockingConnection")
+    def test_flush_buffer_success(self, mock_connection):
+        """Test successful buffer flush."""
+        mock_conn = Mock()
+        mock_channel = Mock()
+        mock_conn.channel.return_value = mock_channel
+        mock_conn.is_closed = False
+        mock_channel.is_closed = False
+        mock_connection.return_value = mock_conn
+        
+        # Use a real MessageBuffer with actual messages for more accurate testing
+        buffer = MessageBuffer(max_size=10, enabled=True)
+        message1 = {"event_type": "tweet", "id": 1}
+        message2 = {"event_type": "tweet", "id": 2}
+        
+        # Add messages to buffer
+        buffer.add_message(message1)
+        buffer.add_message(message2)
+        
+        messenger = MQMessenger(message_buffer=buffer)
+        result = messenger.flush_buffer()
+        
+        assert result == 2
+        assert mock_channel.basic_publish.call_count == 2
+        assert buffer.is_empty() is True
+    
+    @patch("pika.BlockingConnection")
+    def test_flush_buffer_partial_failure(self, mock_connection):
+        """Test buffer flush with partial failure."""
+        # First message succeeds, second fails
+        mock_conn = Mock()
+        mock_channel = Mock()
+        mock_conn.channel.return_value = mock_channel
+        mock_conn.is_closed = False
+        mock_channel.is_closed = False
+        mock_connection.return_value = mock_conn
+        
+        # Make second publish fail
+        mock_channel.basic_publish.side_effect = [None, Exception("Publish failed")]
+        
+        mock_buffer = Mock()
+        mock_buffer.is_empty.side_effect = [False, False, False]  # Never becomes empty in this test
+        mock_buffer.size.return_value = 2
+        mock_buffer._buffer = Mock()  # Mock the internal buffer for re-adding failed message
+        
+        message1 = {"message": {"id": 1}, "timestamp": 1234567890.0, "buffer_sequence": 1}
+        message2 = {"message": {"id": 2}, "timestamp": 1234567891.0, "buffer_sequence": 2}
+        mock_buffer.pop_message.side_effect = [message1, message2]
+        
+        messenger = MQMessenger(message_buffer=mock_buffer)
+        
+        with patch('mq_messenger.deque') as mock_deque_class:
+            mock_temp_buffer = Mock()
+            mock_deque_class.return_value = mock_temp_buffer
+            
+            result = messenger.flush_buffer()
+        
+        assert result == 1  # Only first message flushed successfully
+        assert mock_channel.basic_publish.call_count == 2
+        assert mock_buffer.pop_message.call_count == 2
+    
+    @patch("pika.BlockingConnection") 
+    def test_flush_buffer_connection_failure(self, mock_connection):
+        """Test flush_buffer handles connection failures gracefully."""
+        mock_connection.side_effect = Exception("Connection failed")
+        
+        mock_buffer = Mock()
+        mock_buffer.is_empty.return_value = False
+        mock_buffer.size.return_value = 1
+        mock_buffer.pop_message.return_value = {
+            "message": {"id": 1}, 
+            "timestamp": 1234567890.0, 
+            "buffer_sequence": 1
+        }
+        mock_buffer._buffer = Mock()
+        
+        messenger = MQMessenger(message_buffer=mock_buffer)
+        
+        with patch('mq_messenger.deque') as mock_deque_class:
+            mock_temp_buffer = Mock()
+            mock_deque_class.return_value = mock_temp_buffer
+            
+            result = messenger.flush_buffer()
+        
+        assert result == 0  # No messages flushed due to connection failure
+        mock_buffer.pop_message.assert_called_once()
+
+
+class TestMQMessengerReconnection:
+    """Test MQMessenger reconnection functionality with buffer integration."""
+    
+    @patch("pika.BlockingConnection")
+    def test_reconnect_method(self, mock_connection):
+        """Test reconnect method functionality."""
+        mock_conn = Mock()
+        mock_channel = Mock()
+        mock_conn.channel.return_value = mock_channel
+        mock_conn.is_closed = False
+        mock_channel.is_closed = False
+        mock_connection.return_value = mock_conn
+        
+        messenger = MQMessenger()
+        
+        # Mock existing connection for cleanup
+        old_mock_conn = Mock()
+        old_mock_channel = Mock()
+        messenger._connection = old_mock_conn
+        messenger._channel = old_mock_channel
+        
+        with patch.object(messenger, '_cleanup_connection') as mock_cleanup:
+            result = messenger.reconnect()
+        
+        assert result is True
+        mock_cleanup.assert_called_once()
+        mock_connection.assert_called_once()
+        assert messenger._connection == mock_conn
+        assert messenger._channel == mock_channel
+    
+    @patch("pika.BlockingConnection")
+    def test_reconnect_failure(self, mock_connection):
+        """Test reconnect method handles failures gracefully."""
+        mock_connection.side_effect = Exception("Reconnection failed")
+        
+        messenger = MQMessenger()
+        result = messenger.reconnect()
+        
+        assert result is False
+        assert messenger._connection is None
+        assert messenger._channel is None

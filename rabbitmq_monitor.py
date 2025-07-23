@@ -135,6 +135,9 @@ class RabbitMQConnectionMonitor:
                         consecutive_failures=self._consecutive_failures
                     )
                     self._consecutive_failures = 0
+                    
+                    # Flush buffered messages on connection restore
+                    self._flush_message_buffer()
                 else:
                     logger.warning("RabbitMQ connection lost, initiating reconnection")
                 
@@ -181,6 +184,9 @@ class RabbitMQConnectionMonitor:
                     logger.info("RabbitMQ reconnection successful")
                     self._consecutive_failures = 0
                     self._last_connection_status = True
+                    
+                    # Flush buffered messages after successful reconnection
+                    self._flush_message_buffer()
                     return
             else:
                 # Fallback to close and connect
@@ -193,6 +199,9 @@ class RabbitMQConnectionMonitor:
                     logger.info("RabbitMQ reconnection successful (fallback method)")
                     self._consecutive_failures = 0
                     self._last_connection_status = True
+                    
+                    # Flush buffered messages after successful reconnection
+                    self._flush_message_buffer()
                     return
                     
         except Exception as e:
@@ -206,6 +215,28 @@ class RabbitMQConnectionMonitor:
         # Wait before next attempt (unless shutting down)
         if not self._shutdown_event.wait(timeout=self.retry_delay):
             logger.info(f"Waiting {self.retry_delay} seconds before next reconnection attempt")
+    
+    def _flush_message_buffer(self) -> None:
+        """Attempt to flush message buffer after successful connection restore."""
+        try:
+            if hasattr(self.mq_messenger, 'flush_buffer'):
+                flushed_count = self.mq_messenger.flush_buffer()
+                if flushed_count > 0:
+                    logger.info(
+                        "Message buffer flushed after connection restore",
+                        flushed_messages=flushed_count
+                    )
+                else:
+                    logger.debug("No messages in buffer to flush")
+            else:
+                logger.warning("MQMessenger does not support flush_buffer method")
+                
+        except Exception as e:
+            logger.error(
+                "Error flushing message buffer after connection restore",
+                error=str(e),
+                error_type=type(e).__name__
+            )
     
     def get_status(self) -> dict:
         """Get current monitor status information.

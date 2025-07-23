@@ -51,8 +51,17 @@ uv run pytest tests/test_rabbitmq_monitor.py
 # Run RabbitMQ monitor tests with coverage
 uv run pytest tests/test_rabbitmq_monitor.py --cov=rabbitmq_monitor --cov-report=term-missing
 
+# Run message buffer tests
+uv run pytest tests/test_message_buffer.py
+
+# Run message buffer tests with coverage
+uv run pytest tests/test_message_buffer.py --cov=message_buffer --cov-report=term-missing
+
 # Run all RabbitMQ-related tests
 uv run pytest tests/test_rabbitmq_monitor.py tests/test_mq_messenger.py tests/test_main_rabbitmq.py -v
+
+# Run all buffer and messaging tests
+uv run pytest tests/test_message_buffer.py tests/test_mq_messenger.py tests/test_rabbitmq_monitor.py -v
 ```
 
 ## Architecture
@@ -85,7 +94,8 @@ uv run pytest tests/test_rabbitmq_monitor.py tests/test_mq_messenger.py tests/te
 ```
 ├── main.py                    # Application entry point with dependency injection
 ├── websocket_manager.py       # WebSocket lifecycle management with integrated message handling
-├── mq_messenger.py            # RabbitMQ message publishing service
+├── mq_messenger.py            # RabbitMQ message publishing service with automatic buffering
+├── message_buffer.py          # Thread-safe FIFO message buffer for RabbitMQ outages
 ├── rabbitmq_monitor.py        # RabbitMQ connection monitoring with automatic reconnection
 ├── logging_config.py          # Structured logging configuration
 ├── handlers/                  # Event and message handlers package
@@ -126,11 +136,26 @@ RABBITMQ_MAX_RETRY_ATTEMPTS=3
 RABBITMQ_RETRY_DELAY=5
 ```
 
+### Message Buffer Configuration
+
+The application includes a message buffer system that stores up to 10 messages when RabbitMQ is unavailable. This prevents message loss during temporary connection outages.
+
+- **`MESSAGE_BUFFER_ENABLED`**: Enable/disable message buffering (default: "true")
+- **`MESSAGE_BUFFER_SIZE`**: Maximum number of messages to buffer (default: "10")
+
+Example `.env` configuration:
+```bash
+# Message Buffer Configuration
+MESSAGE_BUFFER_ENABLED=true
+MESSAGE_BUFFER_SIZE=10
+```
+
 ## Key Components
 
 - **Connection Management** (`websocket_manager.py`): Automatic reconnection on failures with retry logic and integrated message handling
 - **Dependency Injection** (`main.py`): MQMessenger instances injected into WebSocketManager for clean separation of concerns
-- **Message Publishing** (`mq_messenger.py`): RabbitMQ service with connection management and message validation
+- **Message Publishing** (`mq_messenger.py`): RabbitMQ service with connection management, message validation, and automatic buffering
+- **Message Buffer** (`message_buffer.py`): Thread-safe FIFO buffer system for storing messages during RabbitMQ outages
 - **Event Processing** (`handlers/` package): Modular real-time message and event processing
 - **Message Analysis** (`handlers/ping.py`, `handlers/tweet.py`): Timestamp analysis and metadata extraction
 - **Error Diagnosis** (`handlers/error.py`): Specialized error handling with diagnostic suggestions
@@ -183,6 +208,41 @@ The monitor provides real-time status information via `get_status()`:
 - **max_retry_attempts**: Configured maximum retry attempts
 - **check_interval**: Health check frequency in seconds
 
+## Message Buffer System
+
+The application includes a sophisticated message buffer system to prevent message loss during RabbitMQ outages and ensure reliable message delivery.
+
+### Buffer Features
+
+- **FIFO Queue**: Messages are stored and retrieved in first-in-first-out order using `collections.deque`
+- **Configurable Capacity**: Default buffer size of 10 messages, configurable via environment variables
+- **Thread Safety**: All buffer operations are protected by threading locks for concurrent access
+- **Automatic Overflow**: When buffer reaches capacity, oldest messages are automatically removed
+- **Message Metadata**: Each buffered message includes timestamp and sequence information
+- **Environment Configuration**: Fully configurable via `MESSAGE_BUFFER_ENABLED` and `MESSAGE_BUFFER_SIZE`
+
+### Buffer Integration
+
+The message buffer is seamlessly integrated into the MQMessenger publish workflow:
+
+1. **Normal Operation**: Messages are published directly to RabbitMQ as usual
+2. **Connection Failure**: Failed messages are automatically stored in the buffer instead of being lost
+3. **Connection Restore**: RabbitMQ monitor triggers automatic buffer flush when connection is restored
+4. **FIFO Processing**: Buffered messages are flushed in the order they were received
+5. **Partial Failure Handling**: If some messages fail during flush, remaining messages stay in buffer
+
+### Buffer Status Information
+
+The buffer provides comprehensive status information via `get_buffer_status()`:
+- **enabled**: Whether buffering is currently enabled
+- **current_size**: Number of messages currently in buffer
+- **max_size**: Maximum buffer capacity
+- **is_full**: Whether buffer has reached capacity
+- **is_empty**: Whether buffer contains no messages
+- **oldest_message_timestamp**: Timestamp of oldest buffered message
+- **newest_message_timestamp**: Timestamp of newest buffered message
+- **oldest_message_age_seconds**: Age of oldest message in seconds
+
 ## Testing
 
 The project includes comprehensive unit tests for the WebSocket management functionality:
@@ -199,9 +259,10 @@ tests/
 ├── test_error_handling.py         # Comprehensive error handling tests (7 tests)
 ├── test_integration.py            # End-to-end integration tests (2 tests)
 ├── test_rabbitmq_monitor.py       # RabbitMQ connection monitor tests (23 tests)
-├── test_mq_messenger.py           # MQMessenger functionality tests
+├── test_mq_messenger.py           # MQMessenger functionality tests (37 tests with buffer integration)
 ├── test_mq_messenger_reconnect.py # MQMessenger reconnection tests
 ├── test_main_rabbitmq.py          # Main application RabbitMQ integration tests
+├── test_message_buffer.py         # MessageBuffer comprehensive test suite (27 tests)
 └── test_tweet_handler.py          # Tweet handler with MQ integration tests
 
 test_websocket_manager.py          # Main test suite entry point
@@ -302,6 +363,17 @@ uv run pytest test_websocket_manager.py --cov=websocket_manager --cov-report=htm
   - Thread shutdown with timeout handling and cleanup verification
   - Environment configuration integration testing
   - Main application integration patterns and lifecycle management
+- **Message Buffer Tests** (27 tests): Comprehensive buffer functionality, thread safety, and integration testing
+  - Buffer initialization with default and custom parameters
+  - Environment variable configuration via `from_env()` factory method
+  - Message addition, retrieval, and removal operations
+  - FIFO queue ordering and overflow behavior with automatic oldest message removal
+  - Thread safety validation with concurrent operations
+  - Buffer capacity management and full/empty state detection
+  - Message metadata handling including timestamps and sequence numbers
+  - Buffer status reporting with comprehensive state information
+  - Integration with MQMessenger for automatic message buffering on RabbitMQ failures
+  - Flush operations with partial failure handling and message preservation
 
 ## Logging
 
