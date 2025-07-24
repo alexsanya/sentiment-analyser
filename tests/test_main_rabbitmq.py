@@ -3,7 +3,7 @@
 import pytest
 from unittest.mock import Mock, patch
 from main import initialize_rabbitmq
-from mq_messenger import MQMessenger
+from src.core.mq_messenger import MQMessenger
 
 
 class TestInitializeRabbitMQ:

@@ -2,10 +2,10 @@
 
 import pytest
 from unittest.mock import Mock, patch
-from handlers.tweet import handle_tweet_event, publish_tweet_event
-from mq_messenger import MQMessenger
-from schemas import TweetOutput, DataSource
-from transformation import map_tweet_data
+from src.handlers.tweet import handle_tweet_event, publish_tweet_event
+from src.core.mq_messenger import MQMessenger
+from src.models.schemas import TweetOutput, DataSource
+from src.core.transformation import map_tweet_data
 
 
 class TestTweetHandlerIntegration:
@@ -299,7 +299,7 @@ class TestTweetTransformationPipeline:
         from pathlib import Path
         
         # Load sample data
-        sample_file = Path(__file__).parent.parent / "tweet-sample.json"
+        sample_file = Path(__file__).parent.parent / "examples" / "tweet-sample.json"
         with open(sample_file, 'r') as f:
             sample_data = json.load(f)
         

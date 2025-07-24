@@ -2,11 +2,11 @@ import os
 import signal
 from typing import Any, Optional
 from dotenv import load_dotenv
-from logging_config import setup_logging, get_logger
-from websocket_manager import WebSocketManager
-from mq_messenger import MQMessenger
-from rabbitmq_monitor import RabbitMQConnectionMonitor
-from handlers import (
+from src.config.logging_config import setup_logging, get_logger
+from src.core.websocket_manager import WebSocketManager
+from src.core.mq_messenger import MQMessenger
+from src.core.rabbitmq_monitor import RabbitMQConnectionMonitor
+from src.handlers import (
     on_error,
     on_close,
     on_open

@@ -4,16 +4,16 @@ import traceback
 import types
 import websocket
 from typing import Dict, Any, Optional, Callable
-from logging_config import get_logger
+from ..config.logging_config import get_logger
 
 # Conditional import to avoid circular dependency
 try:
-    from mq_messenger import MQMessenger
+    from .mq_messenger import MQMessenger
 except ImportError:
     MQMessenger = None
 
 # Import message handlers
-from handlers import (
+from ..handlers import (
     handle_connected_event,
     handle_ping_event,
     handle_tweet_event,

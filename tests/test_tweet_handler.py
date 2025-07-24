@@ -2,8 +2,8 @@
 
 import pytest
 from unittest.mock import Mock, patch
-from handlers.tweet import handle_tweet_event
-from mq_messenger import MQMessenger
+from src.handlers.tweet import handle_tweet_event
+from src.core.mq_messenger import MQMessenger
 
 
 class TestTweetHandler:
@@ -67,7 +67,7 @@ class TestTweetHandler:
             }]
         }
         
-        with patch('handlers.tweet.logger') as mock_logger:
+        with patch('src.handlers.tweet.logger') as mock_logger:
             handle_tweet_event(tweet_data, mock_messenger)
             
             # Verify success logging (first the tweet received log, then publish success)
@@ -94,7 +94,7 @@ class TestTweetHandler:
             }]
         }
         
-        with patch('handlers.tweet.logger') as mock_logger:
+        with patch('src.handlers.tweet.logger') as mock_logger:
             handle_tweet_event(tweet_data, mock_messenger)
             
             # Verify failure logging
@@ -121,7 +121,7 @@ class TestTweetHandler:
             }]
         }
         
-        with patch('handlers.tweet.logger') as mock_logger:
+        with patch('src.handlers.tweet.logger') as mock_logger:
             # Should not raise exception
             handle_tweet_event(tweet_data, mock_messenger)
             

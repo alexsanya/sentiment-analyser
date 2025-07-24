@@ -42,7 +42,7 @@ uv add <package-name>
 uv run pytest test_websocket_manager.py
 
 # Run tests with coverage
-uv run pytest test_websocket_manager.py --cov=websocket_manager --cov-report=term-missing
+uv run pytest test_websocket_manager.py --cov=src.core.websocket_manager --cov-report=term-missing
 
 # Run specific test categories
 uv run pytest tests/test_initialization.py
@@ -55,13 +55,13 @@ uv run pytest tests/ -v
 uv run pytest tests/test_rabbitmq_monitor.py
 
 # Run RabbitMQ monitor tests with coverage
-uv run pytest tests/test_rabbitmq_monitor.py --cov=rabbitmq_monitor --cov-report=term-missing
+uv run pytest tests/test_rabbitmq_monitor.py --cov=src.core.rabbitmq_monitor --cov-report=term-missing
 
 # Run message buffer tests
 uv run pytest tests/test_message_buffer.py
 
 # Run message buffer tests with coverage
-uv run pytest tests/test_message_buffer.py --cov=message_buffer --cov-report=term-missing
+uv run pytest tests/test_message_buffer.py --cov=src.core.message_buffer --cov-report=term-missing
 
 # Run all RabbitMQ-related tests
 uv run pytest tests/test_rabbitmq_monitor.py tests/test_mq_messenger.py tests/test_main_rabbitmq.py -v
@@ -73,7 +73,7 @@ uv run pytest tests/test_message_buffer.py tests/test_mq_messenger.py tests/test
 uv run pytest tests/test_transformation.py
 
 # Run transformation tests with coverage
-uv run pytest tests/test_transformation.py --cov=transformation --cov-report=term-missing
+uv run pytest tests/test_transformation.py --cov=src.core.transformation --cov-report=term-missing
 
 # Docker Development Commands
 
@@ -107,61 +107,87 @@ docker-compose down -v
 **Modular event-driven WebSocket architecture** with dependency injection pattern:
 
 - **Main Application** (`main.py`): Application orchestration and dependency injection coordination
-- **WebSocket Manager** (`websocket_manager.py`): Connection lifecycle management with integrated message processing and MQMessenger dependency injection
-- **MQ Messenger** (`mq_messenger.py`): RabbitMQ message publishing service with schema validation and automatic buffering
-- **Data Transformation** (`transformation.py`): Tweet data standardization and format conversion pipeline
-- **Schema Validation** (`schemas.py`): Pydantic models for data validation and consistency
-- **RabbitMQ Monitor** (`rabbitmq_monitor.py`): Automatic connection monitoring with health checks and reconnection logic
-- **Event Handlers** (`handlers/` package): Modular message and lifecycle event processing
-- **Structured Logging** (`logging_config.py`): Centralized logging configuration
+- **WebSocket Manager** (`src/core/websocket_manager.py`): Connection lifecycle management with integrated message processing and MQMessenger dependency injection
+- **MQ Messenger** (`src/core/mq_messenger.py`): RabbitMQ message publishing service with schema validation and automatic buffering
+- **Data Transformation** (`src/core/transformation.py`): Tweet data standardization and format conversion pipeline
+- **Schema Validation** (`src/models/schemas.py`): Pydantic models for data validation and consistency
+- **RabbitMQ Monitor** (`src/core/rabbitmq_monitor.py`): Automatic connection monitoring with health checks and reconnection logic
+- **Event Handlers** (`src/handlers/` package): Modular message and lifecycle event processing
+- **Structured Logging** (`src/config/logging_config.py`): Centralized logging configuration
 
 ### Handler Architecture
 
 **Message Handlers** (process WebSocket message content):
-- `handlers/connected.py`: Connection establishment confirmation
-- `handlers/ping.py`: Ping events with timestamp analysis and latency monitoring
-- `handlers/tweet.py`: Tweet events with transformation pipeline and schema validation
-- `handlers/unknown.py`: Unknown/unexpected message types
+- `src/handlers/connected.py`: Connection establishment confirmation
+- `src/handlers/ping.py`: Ping events with timestamp analysis and latency monitoring
+- `src/handlers/tweet.py`: Tweet events with transformation pipeline and schema validation
+- `src/handlers/unknown.py`: Unknown/unexpected message types
 
 **Lifecycle Handlers** (manage WebSocket connection events):
-- `handlers/error.py`: Error handling with specialized error type diagnosis and suggestions
-- `handlers/close.py`: Connection closure with status code mapping and logging
-- `handlers/open.py`: Connection establishment events
+- `src/handlers/error.py`: Error handling with specialized error type diagnosis and suggestions
+- `src/handlers/close.py`: Connection closure with status code mapping and logging
+- `src/handlers/open.py`: Connection establishment events
 
-**Handler Package** (`handlers/__init__.py`): Centralized exports for all handlers
+**Handler Package** (`src/handlers/__init__.py`): Centralized exports for all handlers
 
 ### File Structure
 ```
 ├── main.py                    # Application entry point with dependency injection
-├── websocket_manager.py       # WebSocket lifecycle management with integrated message handling
-├── mq_messenger.py            # RabbitMQ message publishing service with schema validation and buffering
-├── message_buffer.py          # Thread-safe FIFO message buffer for RabbitMQ outages
-├── transformation.py          # Tweet data transformation and standardization pipeline
-├── schemas.py                 # Pydantic models for data validation and schema enforcement
-├── rabbitmq_monitor.py        # RabbitMQ connection monitoring with automatic reconnection
-├── logging_config.py          # Structured logging configuration
-├── handlers/                  # Event and message handlers package
-│   ├── __init__.py           # Package exports
-│   ├── connected.py          # Connection establishment handler
-│   ├── ping.py               # Ping message handler with timing analysis
-│   ├── tweet.py              # Tweet message handler with transformation pipeline integration
-│   ├── unknown.py            # Unknown message type handler
-│   ├── error.py              # WebSocket error handler with diagnostics
-│   ├── close.py              # Connection close handler with status mapping
-│   └── open.py               # Connection open handler
-├── tests/                     # Comprehensive test suite
+├── src/                       # Source code package
+│   ├── __init__.py           # Package initialization
+│   ├── config/               # Configuration modules
+│   │   ├── __init__.py      # Package exports
+│   │   └── logging_config.py # Structured logging configuration
+│   ├── core/                 # Core business logic modules
+│   │   ├── __init__.py      # Package exports
+│   │   ├── websocket_manager.py # WebSocket lifecycle management with integrated message handling
+│   │   ├── mq_messenger.py  # RabbitMQ message publishing service with schema validation and buffering
+│   │   ├── message_buffer.py # Thread-safe FIFO message buffer for RabbitMQ outages
+│   │   ├── transformation.py # Tweet data transformation and standardization pipeline
+│   │   └── rabbitmq_monitor.py # RabbitMQ connection monitoring with automatic reconnection
+│   ├── handlers/             # Event and message handlers package
+│   │   ├── __init__.py      # Package exports
+│   │   ├── connected.py     # Connection establishment handler
+│   │   ├── ping.py          # Ping message handler with timing analysis
+│   │   ├── tweet.py         # Tweet message handler with transformation pipeline integration
+│   │   ├── unknown.py       # Unknown message type handler
+│   │   ├── error.py         # WebSocket error handler with diagnostics
+│   │   ├── close.py         # Connection close handler with status mapping
+│   │   └── open.py          # Connection open handler
+│   └── models/               # Data models and schemas
+│       ├── __init__.py      # Package exports
+│       └── schemas.py       # Pydantic models for data validation and schema enforcement
+├── tests/                    # Comprehensive test suite
+│   ├── __init__.py          # Package initialization
+│   ├── conftest.py          # Shared test fixtures
 │   ├── test_transformation.py # Transformation pipeline tests
-│   └── ...                   # Other test files
-├── tweet-sample.json         # Sample tweet data for testing and development
-└── logs/                      # Log files (auto-created)
+│   └── ...                  # Other test files
+├── test_websocket_manager.py # Main test suite entry point
+├── conftest.py              # Root-level fixtures for main runner
+├── examples/                # Example files and sample data
+│   └── tweet-sample.json   # Sample tweet data for testing and development
+├── docs/                    # Documentation files
+│   ├── review-process.md   # Code review process documentation
+│   └── unit-testing-plan.md # Testing strategy documentation
+├── logs/                    # Log files (auto-created)
+│   ├── app.log             # All log levels (INFO and above)
+│   ├── warning.log         # WARNING level and above
+│   └── error.log           # ERROR level messages only
+├── docker/                  # Docker-related files
+├── mypy.ini                # MyPy type checking configuration
+├── pyproject.toml          # Project configuration and dependencies
+├── uv.lock                 # UV lock file for reproducible builds
+├── docker-compose.yml      # Multi-service Docker orchestration
+├── Dockerfile             # Container build instructions
+└── README.md              # Project overview and setup instructions
 ```
 
 ## Configuration
 
 - **`.env`**: Contains `TWITTERAPI_KEY` for Twitter API authentication and optional `ENVIRONMENT` setting
 - **`pyproject.toml`**: Project configuration and dependencies
-- **`.python-version`**: Enforces Python 3.12 requirement
-- **`logging_config.py`**: Structured logging configuration with file separation by log level
+- **`mypy.ini`**: MyPy type checking configuration
+- **`src/config/logging_config.py`**: Structured logging configuration with file separation by log level
 
 ### RabbitMQ Monitor Configuration
 
@@ -240,9 +266,8 @@ All configuration from `.env` file is automatically passed to containers:
 ### Docker Development Workflow
 
 ```bash
-# Initial setup - copy environment template
-cp .env.example .env
-# Edit .env with your configuration
+# Initial setup - create environment file
+# Copy your configuration to .env file
 
 # Start all services
 docker-compose up -d
@@ -263,15 +288,15 @@ docker-compose down
 
 ## Key Components
 
-- **Connection Management** (`websocket_manager.py`): Automatic reconnection on failures with retry logic and integrated message handling
+- **Connection Management** (`src/core/websocket_manager.py`): Automatic reconnection on failures with retry logic and integrated message handling
 - **Dependency Injection** (`main.py`): MQMessenger instances injected into WebSocketManager for clean separation of concerns
-- **Message Publishing** (`mq_messenger.py`): RabbitMQ service with connection management, schema validation, and automatic buffering
-- **Data Transformation** (`transformation.py`): Tweet data standardization with datetime parsing and URL extraction
-- **Schema Validation** (`schemas.py`): Pydantic models ensuring data consistency and type safety
-- **Message Buffer** (`message_buffer.py`): Thread-safe FIFO buffer system for storing messages during RabbitMQ outages
-- **Event Processing** (`handlers/` package): Modular real-time message and event processing
-- **Message Analysis** (`handlers/ping.py`, `handlers/tweet.py`): Timestamp analysis and transformation pipeline processing
-- **Error Diagnosis** (`handlers/error.py`): Specialized error handling with diagnostic suggestions
+- **Message Publishing** (`src/core/mq_messenger.py`): RabbitMQ service with connection management, schema validation, and automatic buffering
+- **Data Transformation** (`src/core/transformation.py`): Tweet data standardization with datetime parsing and URL extraction
+- **Schema Validation** (`src/models/schemas.py`): Pydantic models ensuring data consistency and type safety
+- **Message Buffer** (`src/core/message_buffer.py`): Thread-safe FIFO buffer system for storing messages during RabbitMQ outages
+- **Event Processing** (`src/handlers/` package): Modular real-time message and event processing
+- **Message Analysis** (`src/handlers/ping.py`, `src/handlers/tweet.py`): Timestamp analysis and transformation pipeline processing
+- **Error Diagnosis** (`src/handlers/error.py`): Specialized error handling with diagnostic suggestions
 - **Structured Logging**: JSON-formatted logs separated by level (error.log, warning.log, app.log)
 - **Graceful Shutdown**: Signal handling with proper WebSocket and MQ connection cleanup
 
@@ -476,17 +501,17 @@ uv run pytest tests/test_rabbitmq_monitor.py::TestRabbitMQMonitorEnvironmentInte
 uv run pytest tests/test_transformation.py::TestTransformation -v
 
 # Run with coverage reporting
-uv run pytest test_websocket_manager.py --cov=websocket_manager --cov-report=term-missing
+uv run pytest test_websocket_manager.py --cov=src.core.websocket_manager --cov-report=term-missing
 
 # Run specific test class
 uv run pytest test_websocket_manager.py::TestWebSocketManagerInitialization
 
 # Generate HTML coverage report
-uv run pytest test_websocket_manager.py --cov=websocket_manager --cov-report=html
+uv run pytest test_websocket_manager.py --cov=src.core.websocket_manager --cov-report=html
 ```
 
 ### Test Coverage
-- **WebSocket Manager Coverage**: 92% of websocket_manager.py (70/70 tests passing across all components)
+- **WebSocket Manager Coverage**: 92% of src/core/websocket_manager.py (70/70 tests passing across all components)
 - **RabbitMQ Monitor Coverage**: Comprehensive test coverage with 23 test cases covering all monitor functionality
 - **Tested Components**: WebSocketManager initialization, signal handling, connection management, WebSocket lifecycle, comprehensive error handling, integration workflows, MQMessenger functionality, RabbitMQ connection monitoring, data transformation pipeline, schema validation, and tweet handler operations
 - **Connection Management Tests** (8 tests): Connection lifecycle, retry logic, error handling, shutdown coordination
@@ -583,7 +608,7 @@ uv run pytest test_websocket_manager.py --cov=websocket_manager --cov-report=htm
 - **Clean Architecture**: Follows SOLID principles with clear separation of concerns
 
 ### Handler Development
-- **Message Handlers**: Add new message types by creating handlers in `handlers/` and updating `__init__.py`
+- **Message Handlers**: Add new message types by creating handlers in `src/handlers/` and updating `src/handlers/__init__.py`
 - **Lifecycle Handlers**: WebSocket connection events (open, close, error) are handled by dedicated modules
 - **Integrated Processing**: WebSocketManager includes internal `_on_message` method for seamless MQ integration
 - **Consistent Interface**: All handlers follow established patterns for logging and error handling

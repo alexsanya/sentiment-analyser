@@ -2,14 +2,14 @@ import json
 import pytest
 from pathlib import Path
 from datetime import datetime
-from transformation import map_tweet_data, parse_twitter_datetime, extract_url, validate_url_security, sanitize_url_list
-from schemas import TweetOutput, DataSource
+from src.core.transformation import map_tweet_data, parse_twitter_datetime, extract_url, validate_url_security, sanitize_url_list
+from src.models.schemas import TweetOutput, DataSource
 from pydantic import ValidationError
 
 def test_map_tweet_data_snapshot():
     """Snapshot test for map_tweet_data function with tweet-sample.json"""
     # Load sample data
-    sample_file = Path(__file__).parent.parent / "tweet-sample.json"
+    sample_file = Path(__file__).parent.parent / "examples" / "tweet-sample.json"
     with open(sample_file, 'r') as f:
         input_data = json.load(f)
     

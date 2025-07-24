@@ -5,7 +5,7 @@ import time
 import threading
 import pytest
 from unittest.mock import patch
-from message_buffer import MessageBuffer
+from src.core.message_buffer import MessageBuffer
 
 
 class TestMessageBufferInitialization:

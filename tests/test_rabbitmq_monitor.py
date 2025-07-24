@@ -6,7 +6,7 @@ import time
 import logging
 from unittest.mock import Mock, patch, MagicMock
 import pytest
-from rabbitmq_monitor import RabbitMQConnectionMonitor
+from src.core.rabbitmq_monitor import RabbitMQConnectionMonitor
 
 
 # Test-specific logging setup to capture messages properly
@@ -107,7 +107,7 @@ class TestRabbitMQConnectionMonitor:
     
     def test_start_monitor_already_running(self, monitor):
         """Test starting monitor when already running."""
-        with patch('rabbitmq_monitor.logger') as mock_logger:
+        with patch('src.core.rabbitmq_monitor.logger') as mock_logger:
             monitor.start()
             
             # Try to start again
@@ -213,7 +213,7 @@ class TestRabbitMQConnectionMonitor:
     
     def test_max_retry_attempts_exceeded(self, monitor, mock_mq_messenger):
         """Test behavior when max retry attempts are exceeded."""
-        with patch('rabbitmq_monitor.logger') as mock_logger:
+        with patch('src.core.rabbitmq_monitor.logger') as mock_logger:
             mock_mq_messenger.reconnect.return_value = False
             
             monitor._consecutive_failures = 4  # Exceeds max of 3
@@ -230,7 +230,7 @@ class TestRabbitMQConnectionMonitor:
     
     def test_reconnection_exception_handling(self, monitor, mock_mq_messenger):
         """Test exception handling during reconnection."""
-        with patch('rabbitmq_monitor.logger') as mock_logger:
+        with patch('src.core.rabbitmq_monitor.logger') as mock_logger:
             mock_mq_messenger.reconnect.side_effect = Exception("Connection failed")
             
             monitor._consecutive_failures = 1
@@ -263,7 +263,7 @@ class TestRabbitMQConnectionMonitor:
     
     def test_monitor_loop_integration(self, mock_mq_messenger):
         """Test the complete monitoring loop integration."""
-        with patch('rabbitmq_monitor.logger') as mock_logger:
+        with patch('src.core.rabbitmq_monitor.logger') as mock_logger:
             monitor = RabbitMQConnectionMonitor(
                 mq_messenger=mock_mq_messenger,
                 check_interval=0.1,  # Very short for testing
@@ -290,7 +290,7 @@ class TestRabbitMQConnectionMonitor:
     
     def test_connection_status_change_logging(self, monitor, mock_mq_messenger):
         """Test logging of connection status changes."""
-        with patch('rabbitmq_monitor.logger') as mock_logger:
+        with patch('src.core.rabbitmq_monitor.logger') as mock_logger:
             # Start with good connection
             mock_mq_messenger.is_connected.return_value = True
             mock_mq_messenger.test_connection.return_value = True

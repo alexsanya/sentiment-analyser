@@ -5,7 +5,7 @@ Test cases for WebSocketManager signal handler functionality.
 import pytest
 import types
 from unittest.mock import Mock
-from websocket_manager import WebSocketManager
+from src.core.websocket_manager import WebSocketManager
 
 
 class TestWebSocketManagerSignalHandler:

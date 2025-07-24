@@ -1,7 +1,7 @@
 """Handler for 'connected' event type."""
 
 from typing import Dict, Any
-from logging_config import get_logger
+from ..config.logging_config import get_logger
 
 logger = get_logger(__name__)
 

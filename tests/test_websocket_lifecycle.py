@@ -13,7 +13,7 @@ Tests the WebSocket lifecycle management functionality including:
 import pytest
 from unittest.mock import Mock, patch, call
 import websocket
-from websocket_manager import WebSocketManager
+from src.core.websocket_manager import WebSocketManager
 
 
 class TestWebSocketLifecycle:
@@ -23,7 +23,7 @@ class TestWebSocketLifecycle:
         """Test WebSocketApp is created with correct parameters."""
         # Mock WebSocketApp
         mock_ws_app = Mock(spec=websocket.WebSocketApp)
-        mock_websocket_app = mocker.patch('websocket_manager.websocket.WebSocketApp', return_value=mock_ws_app)
+        mock_websocket_app = mocker.patch('src.core.websocket_manager.websocket.WebSocketApp', return_value=mock_ws_app)
         
         # Create manager
         manager = WebSocketManager(**mock_callbacks)
@@ -53,7 +53,7 @@ class TestWebSocketLifecycle:
         """Test callback functions are properly assigned to WebSocket."""
         # Mock WebSocketApp
         mock_ws_app = Mock(spec=websocket.WebSocketApp)
-        mock_websocket_app = mocker.patch('websocket_manager.websocket.WebSocketApp', return_value=mock_ws_app)
+        mock_websocket_app = mocker.patch('src.core.websocket_manager.websocket.WebSocketApp', return_value=mock_ws_app)
         
         # Create manager
         manager = WebSocketManager(**mock_callbacks)
@@ -90,7 +90,7 @@ class TestWebSocketLifecycle:
         """Test ping_interval and ping_timeout are set correctly."""
         # Mock WebSocketApp
         mock_ws_app = Mock(spec=websocket.WebSocketApp)
-        mock_websocket_app = mocker.patch('websocket_manager.websocket.WebSocketApp', return_value=mock_ws_app)
+        mock_websocket_app = mocker.patch('src.core.websocket_manager.websocket.WebSocketApp', return_value=mock_ws_app)
         
         # Create manager
         manager = WebSocketManager(**mock_callbacks)
@@ -113,7 +113,7 @@ class TestWebSocketLifecycle:
         """Test current_ws reference lifecycle during connection."""
         # Mock WebSocketApp
         mock_ws_app = Mock(spec=websocket.WebSocketApp)
-        mock_websocket_app = mocker.patch('websocket_manager.websocket.WebSocketApp', return_value=mock_ws_app)
+        mock_websocket_app = mocker.patch('src.core.websocket_manager.websocket.WebSocketApp', return_value=mock_ws_app)
         
         # Create manager
         manager = WebSocketManager(**mock_callbacks)
@@ -149,10 +149,10 @@ class TestWebSocketLifecycle:
         # Mock WebSocketApp to raise exception
         mock_ws_app = Mock(spec=websocket.WebSocketApp)
         mock_ws_app.run_forever.side_effect = Exception("Test connection error")
-        mock_websocket_app = mocker.patch('websocket_manager.websocket.WebSocketApp', return_value=mock_ws_app)
+        mock_websocket_app = mocker.patch('src.core.websocket_manager.websocket.WebSocketApp', return_value=mock_ws_app)
         
         # Mock time.sleep to set shutdown flag and avoid infinite retry loop
-        mock_sleep = mocker.patch('websocket_manager.time.sleep')
+        mock_sleep = mocker.patch('src.core.websocket_manager.time.sleep')
         
         def sleep_side_effect(duration):
             manager.shutdown_requested = True
@@ -177,7 +177,7 @@ class TestWebSocketLifecycle:
         """Test WebSocketApp creation with specific parameter order and types."""
         # Mock WebSocketApp
         mock_ws_app = Mock(spec=websocket.WebSocketApp)
-        mock_websocket_app = mocker.patch('websocket_manager.websocket.WebSocketApp', return_value=mock_ws_app)
+        mock_websocket_app = mocker.patch('src.core.websocket_manager.websocket.WebSocketApp', return_value=mock_ws_app)
         
         # Create manager
         manager = WebSocketManager(**mock_callbacks)

@@ -16,7 +16,7 @@ from unittest.mock import Mock, patch, call
 import websocket
 import socket
 import ssl
-from websocket_manager import WebSocketManager
+from src.core.websocket_manager import WebSocketManager
 
 
 class TestErrorHandling:
@@ -36,12 +36,12 @@ class TestErrorHandling:
         
         mock_ws_app_3 = Mock(spec=websocket.WebSocketApp)
         
-        mock_websocket_app = mocker.patch('websocket_manager.websocket.WebSocketApp')
+        mock_websocket_app = mocker.patch('src.core.websocket_manager.websocket.WebSocketApp')
         mock_websocket_app.side_effect = [mock_ws_app_1, mock_ws_app_2, mock_ws_app_3]
         
         # Mock time.sleep and traceback
-        mock_sleep = mocker.patch('websocket_manager.time.sleep')
-        mock_traceback = mocker.patch('websocket_manager.traceback.format_exc')
+        mock_sleep = mocker.patch('src.core.websocket_manager.time.sleep')
+        mock_traceback = mocker.patch('src.core.websocket_manager.traceback.format_exc')
         mock_traceback.side_effect = ["ConnectionError traceback", "TimeoutError traceback"]
         
         # Create manager
@@ -84,10 +84,10 @@ class TestErrorHandling:
         # Mock WebSocketApp to raise exception
         mock_ws_app = Mock(spec=websocket.WebSocketApp)
         mock_ws_app.run_forever.side_effect = Exception("Connection failed")
-        mock_websocket_app = mocker.patch('websocket_manager.websocket.WebSocketApp', return_value=mock_ws_app)
+        mock_websocket_app = mocker.patch('src.core.websocket_manager.websocket.WebSocketApp', return_value=mock_ws_app)
         
         # Mock time.sleep to track calls
-        mock_sleep = mocker.patch('websocket_manager.time.sleep')
+        mock_sleep = mocker.patch('src.core.websocket_manager.time.sleep')
         
         # Create manager
         manager = WebSocketManager(**mock_callbacks)
@@ -131,11 +131,11 @@ class TestErrorHandling:
             # Mock WebSocketApp to raise specific exception
             mock_ws_app = Mock()
             mock_ws_app.run_forever.side_effect = exception
-            mock_websocket_app = mocker.patch('websocket_manager.websocket.WebSocketApp', return_value=mock_ws_app)
+            mock_websocket_app = mocker.patch('src.core.websocket_manager.websocket.WebSocketApp', return_value=mock_ws_app)
             
             # Mock sleep for exceptions that trigger retry
             if not isinstance(exception, KeyboardInterrupt):
-                mock_sleep = mocker.patch('websocket_manager.time.sleep')
+                mock_sleep = mocker.patch('src.core.websocket_manager.time.sleep')
                 def sleep_side_effect(duration):
                     manager.shutdown_requested = True
                 mock_sleep.side_effect = sleep_side_effect
@@ -172,16 +172,16 @@ class TestErrorHandling:
             # Mock WebSocketApp to raise specific exception
             mock_ws_app = Mock()
             mock_ws_app.run_forever.side_effect = exception
-            mock_websocket_app = mocker.patch('websocket_manager.websocket.WebSocketApp', return_value=mock_ws_app)
+            mock_websocket_app = mocker.patch('src.core.websocket_manager.websocket.WebSocketApp', return_value=mock_ws_app)
             
             # Mock sleep to control test execution
-            mock_sleep = mocker.patch('websocket_manager.time.sleep')
+            mock_sleep = mocker.patch('src.core.websocket_manager.time.sleep')
             def sleep_side_effect(duration):
                 manager.shutdown_requested = True
             mock_sleep.side_effect = sleep_side_effect
             
             # Mock traceback for error logging
-            mock_traceback = mocker.patch('websocket_manager.traceback.format_exc', return_value=f"Traceback for {type(exception).__name__}")
+            mock_traceback = mocker.patch('src.core.websocket_manager.traceback.format_exc', return_value=f"Traceback for {type(exception).__name__}")
             
             # Create fresh manager
             manager = WebSocketManager(**mock_callbacks)
@@ -237,16 +237,16 @@ class TestErrorHandling:
         """Test handling when WebSocketApp constructor itself raises exception."""
         # Mock WebSocketApp constructor to raise exception
         websocket_creation_error = ValueError("Invalid WebSocket parameters")
-        mock_websocket_app = mocker.patch('websocket_manager.websocket.WebSocketApp', side_effect=websocket_creation_error)
+        mock_websocket_app = mocker.patch('src.core.websocket_manager.websocket.WebSocketApp', side_effect=websocket_creation_error)
         
         # Mock sleep to control test execution
-        mock_sleep = mocker.patch('websocket_manager.time.sleep')
+        mock_sleep = mocker.patch('src.core.websocket_manager.time.sleep')
         def sleep_side_effect(duration):
             manager.shutdown_requested = True
         mock_sleep.side_effect = sleep_side_effect
         
         # Mock traceback for error logging
-        mock_traceback = mocker.patch('websocket_manager.traceback.format_exc', return_value="WebSocket creation traceback")
+        mock_traceback = mocker.patch('src.core.websocket_manager.traceback.format_exc', return_value="WebSocket creation traceback")
         
         # Create manager
         manager = WebSocketManager(**mock_callbacks)
@@ -291,11 +291,11 @@ class TestErrorHandling:
                 mock_ws.run_forever.side_effect = success_side_effect
             mock_ws_apps.append(mock_ws)
         
-        mock_websocket_app = mocker.patch('websocket_manager.websocket.WebSocketApp', side_effect=mock_ws_apps)
+        mock_websocket_app = mocker.patch('src.core.websocket_manager.websocket.WebSocketApp', side_effect=mock_ws_apps)
         
         # Mock sleep and traceback
-        mock_sleep = mocker.patch('websocket_manager.time.sleep')
-        mock_traceback = mocker.patch('websocket_manager.traceback.format_exc')
+        mock_sleep = mocker.patch('src.core.websocket_manager.time.sleep')
+        mock_traceback = mocker.patch('src.core.websocket_manager.traceback.format_exc')
         mock_traceback.side_effect = [f"Traceback {i}" for i in range(len(exceptions_sequence))]
         
         # Create manager

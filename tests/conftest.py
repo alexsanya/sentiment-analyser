@@ -20,4 +20,4 @@ def mock_callbacks():
 @pytest.fixture
 def mock_logger(mocker):
     """Mock the get_logger function."""
-    return mocker.patch('websocket_manager.get_logger')
+    return mocker.patch('src.core.websocket_manager.get_logger')

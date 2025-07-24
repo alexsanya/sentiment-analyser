@@ -14,7 +14,7 @@ Tests the connect() method functionality including:
 import pytest
 from unittest.mock import Mock, patch, call
 import websocket
-from websocket_manager import WebSocketManager
+from src.core.websocket_manager import WebSocketManager
 
 
 class TestConnectionManagement:
@@ -24,7 +24,7 @@ class TestConnectionManagement:
         """Test successful WebSocket connection establishment."""
         # Mock WebSocketApp
         mock_ws_app = Mock(spec=websocket.WebSocketApp)
-        mock_websocket_app = mocker.patch('websocket_manager.websocket.WebSocketApp', return_value=mock_ws_app)
+        mock_websocket_app = mocker.patch('src.core.websocket_manager.websocket.WebSocketApp', return_value=mock_ws_app)
         
         # Create manager
         manager = WebSocketManager(**mock_callbacks)
@@ -64,11 +64,11 @@ class TestConnectionManagement:
         
         mock_ws_app_2 = Mock(spec=websocket.WebSocketApp)
         
-        mock_websocket_app = mocker.patch('websocket_manager.websocket.WebSocketApp')
+        mock_websocket_app = mocker.patch('src.core.websocket_manager.websocket.WebSocketApp')
         mock_websocket_app.side_effect = [mock_ws_app_1, mock_ws_app_2]
         
         # Mock time.sleep
-        mock_sleep = mocker.patch('websocket_manager.time.sleep')
+        mock_sleep = mocker.patch('src.core.websocket_manager.time.sleep')
         
         # Create manager
         manager = WebSocketManager(**mock_callbacks)
@@ -105,7 +105,7 @@ class TestConnectionManagement:
         """Test shutdown flag interrupts connection loop."""
         # Mock WebSocketApp
         mock_ws_app = Mock(spec=websocket.WebSocketApp)
-        mock_websocket_app = mocker.patch('websocket_manager.websocket.WebSocketApp', return_value=mock_ws_app)
+        mock_websocket_app = mocker.patch('src.core.websocket_manager.websocket.WebSocketApp', return_value=mock_ws_app)
         
         # Create manager with shutdown already requested
         manager = WebSocketManager(**mock_callbacks)
@@ -127,10 +127,10 @@ class TestConnectionManagement:
         # Mock WebSocketApp to raise exception
         mock_ws_app = Mock(spec=websocket.WebSocketApp)
         mock_ws_app.run_forever.side_effect = Exception("Connection failed")
-        mock_websocket_app = mocker.patch('websocket_manager.websocket.WebSocketApp', return_value=mock_ws_app)
+        mock_websocket_app = mocker.patch('src.core.websocket_manager.websocket.WebSocketApp', return_value=mock_ws_app)
         
         # Mock time.sleep
-        mock_sleep = mocker.patch('websocket_manager.time.sleep')
+        mock_sleep = mocker.patch('src.core.websocket_manager.time.sleep')
         
         # Create manager
         manager = WebSocketManager(**mock_callbacks)
@@ -161,7 +161,7 @@ class TestConnectionManagement:
         # Mock WebSocketApp to raise KeyboardInterrupt
         mock_ws_app = Mock(spec=websocket.WebSocketApp)
         mock_ws_app.run_forever.side_effect = KeyboardInterrupt("User interrupt")
-        mock_websocket_app = mocker.patch('websocket_manager.websocket.WebSocketApp', return_value=mock_ws_app)
+        mock_websocket_app = mocker.patch('src.core.websocket_manager.websocket.WebSocketApp', return_value=mock_ws_app)
         
         # Create manager
         manager = WebSocketManager(**mock_callbacks)
@@ -186,13 +186,13 @@ class TestConnectionManagement:
         test_exception = Exception("Test connection error")
         mock_ws_app = Mock(spec=websocket.WebSocketApp)
         mock_ws_app.run_forever.side_effect = test_exception
-        mock_websocket_app = mocker.patch('websocket_manager.websocket.WebSocketApp', return_value=mock_ws_app)
+        mock_websocket_app = mocker.patch('src.core.websocket_manager.websocket.WebSocketApp', return_value=mock_ws_app)
         
         # Mock traceback for traceback logging
-        mock_traceback = mocker.patch('websocket_manager.traceback.format_exc', return_value="Mock traceback")
+        mock_traceback = mocker.patch('src.core.websocket_manager.traceback.format_exc', return_value="Mock traceback")
         
         # Mock time.sleep to set shutdown flag after sleep calls
-        mock_sleep = mocker.patch('websocket_manager.time.sleep')
+        mock_sleep = mocker.patch('src.core.websocket_manager.time.sleep')
         
         # Create manager
         manager = WebSocketManager(**mock_callbacks)
@@ -231,7 +231,7 @@ class TestConnectionManagement:
         """Test current_ws is properly set and cleared."""
         # Mock WebSocketApp
         mock_ws_app = Mock(spec=websocket.WebSocketApp)
-        mock_websocket_app = mocker.patch('websocket_manager.websocket.WebSocketApp', return_value=mock_ws_app)
+        mock_websocket_app = mocker.patch('src.core.websocket_manager.websocket.WebSocketApp', return_value=mock_ws_app)
         
         # Create manager
         manager = WebSocketManager(**mock_callbacks)
@@ -260,7 +260,7 @@ class TestConnectionManagement:
         """Test the double shutdown check at the beginning of the loop."""
         # Mock WebSocketApp
         mock_ws_app = Mock(spec=websocket.WebSocketApp)
-        mock_websocket_app = mocker.patch('websocket_manager.websocket.WebSocketApp', return_value=mock_ws_app)
+        mock_websocket_app = mocker.patch('src.core.websocket_manager.websocket.WebSocketApp', return_value=mock_ws_app)
         
         # Create manager with shutdown not initially requested
         manager = WebSocketManager(**mock_callbacks)

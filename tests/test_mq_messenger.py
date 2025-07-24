@@ -4,8 +4,8 @@ import json
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 import pika
-from mq_messenger import MQMessenger
-from message_buffer import MessageBuffer
+from src.core.mq_messenger import MQMessenger
+from src.core.message_buffer import MessageBuffer
 
 
 class TestMQMessengerInitialization:
@@ -320,7 +320,7 @@ class TestMQMessengerPublish:
     @patch("pika.BlockingConnection")
     def test_publish_with_tweetoutput_object(self, mock_connection):
         """Test publish accepts TweetOutput objects and converts them to dictionaries."""
-        from schemas import TweetOutput
+        from src.models.schemas import TweetOutput
         
         mock_conn = Mock()
         mock_channel = Mock()
@@ -431,7 +431,7 @@ class TestMQMessengerBufferIntegration:
     
     def test_initialization_with_default_buffer(self):
         """Test MQMessenger initializes with default MessageBuffer."""
-        with patch('message_buffer.MessageBuffer.from_env') as mock_from_env:
+        with patch('src.core.message_buffer.MessageBuffer.from_env') as mock_from_env:
             mock_buffer = Mock()
             mock_from_env.return_value = mock_buffer
             
@@ -598,7 +598,7 @@ class TestMQMessengerBufferIntegration:
         
         messenger = MQMessenger(message_buffer=mock_buffer)
         
-        with patch('mq_messenger.deque') as mock_deque_class:
+        with patch('src.core.mq_messenger.deque') as mock_deque_class:
             mock_temp_buffer = Mock()
             mock_deque_class.return_value = mock_temp_buffer
             
@@ -625,7 +625,7 @@ class TestMQMessengerBufferIntegration:
         
         messenger = MQMessenger(message_buffer=mock_buffer)
         
-        with patch('mq_messenger.deque') as mock_deque_class:
+        with patch('src.core.mq_messenger.deque') as mock_deque_class:
             mock_temp_buffer = Mock()
             mock_deque_class.return_value = mock_temp_buffer
             
