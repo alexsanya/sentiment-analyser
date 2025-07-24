@@ -5,7 +5,7 @@ import time
 import threading
 from collections import deque
 from typing import Dict, Any, List, Optional
-from logging_config import get_logger
+from ..config.logging_config import get_logger
 
 logger = get_logger(__name__)
 

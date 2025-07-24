@@ -9,9 +9,9 @@ import pika
 from pika.adapters.blocking_connection import BlockingChannel
 from pika.connection import Connection
 from pydantic import ValidationError
-from logging_config import get_logger
-from message_buffer import MessageBuffer
-from schemas import TweetOutput
+from ..config.logging_config import get_logger
+from .message_buffer import MessageBuffer
+from ..models.schemas import TweetOutput
 
 logger = get_logger(__name__)
 

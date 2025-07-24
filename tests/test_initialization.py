@@ -4,7 +4,7 @@ Test cases for WebSocketManager initialization functionality.
 
 import pytest
 from unittest.mock import Mock
-from websocket_manager import WebSocketManager
+from src.core.websocket_manager import WebSocketManager
 
 
 class TestWebSocketManagerInitialization:
@@ -34,7 +34,7 @@ class TestWebSocketManagerInitialization:
     
     def test_initial_state(self, mock_callbacks, mocker):
         """Test initial state values are set correctly."""
-        mocker.patch('websocket_manager.get_logger')
+        mocker.patch('src.core.websocket_manager.get_logger')
         
         manager = WebSocketManager(
             on_message=mock_callbacks['on_message'],
@@ -49,7 +49,7 @@ class TestWebSocketManagerInitialization:
     
     def test_callback_function_types(self, mock_callbacks, mocker):
         """Test that callback functions are callable."""
-        mocker.patch('websocket_manager.get_logger')
+        mocker.patch('src.core.websocket_manager.get_logger')
         
         manager = WebSocketManager(
             on_message=mock_callbacks['on_message'],
@@ -78,7 +78,7 @@ class TestWebSocketManagerInitialization:
         def dummy_on_open(ws):
             pass
         
-        mocker.patch('websocket_manager.get_logger')
+        mocker.patch('src.core.websocket_manager.get_logger')
         
         manager = WebSocketManager(
             on_message=dummy_on_message,

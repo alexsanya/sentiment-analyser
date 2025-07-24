@@ -12,7 +12,7 @@ Tests complete WebSocketManager workflows including:
 import pytest
 from unittest.mock import Mock, patch, call
 import websocket
-from websocket_manager import WebSocketManager
+from src.core.websocket_manager import WebSocketManager
 
 
 class TestIntegration:
@@ -22,10 +22,10 @@ class TestIntegration:
         """Test complete connection lifecycle with mocked WebSocket."""
         # Mock WebSocketApp for complete lifecycle test
         mock_ws_app = Mock(spec=websocket.WebSocketApp)
-        mock_websocket_app = mocker.patch('websocket_manager.websocket.WebSocketApp', return_value=mock_ws_app)
+        mock_websocket_app = mocker.patch('src.core.websocket_manager.websocket.WebSocketApp', return_value=mock_ws_app)
         
         # Mock time.sleep for controlled timing
-        mock_sleep = mocker.patch('websocket_manager.time.sleep')
+        mock_sleep = mocker.patch('src.core.websocket_manager.time.sleep')
         
         # Create manager
         manager = WebSocketManager(**mock_callbacks)
@@ -97,7 +97,7 @@ class TestIntegration:
         """Test complete shutdown sequence from signal to connection termination."""
         # Mock WebSocketApp
         mock_ws_app = Mock(spec=websocket.WebSocketApp)
-        mock_websocket_app = mocker.patch('websocket_manager.websocket.WebSocketApp', return_value=mock_ws_app)
+        mock_websocket_app = mocker.patch('src.core.websocket_manager.websocket.WebSocketApp', return_value=mock_ws_app)
         
         # Create manager
         manager = WebSocketManager(**mock_callbacks)

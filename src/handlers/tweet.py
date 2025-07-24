@@ -2,9 +2,9 @@
 
 import time
 from typing import Dict, Any
-from logging_config import get_logger
-from mq_messenger import MQMessenger
-from transformation import map_tweet_data
+from ..config.logging_config import get_logger
+from ..core.mq_messenger import MQMessenger
+from ..core.transformation import map_tweet_data
 
 logger = get_logger(__name__)
 

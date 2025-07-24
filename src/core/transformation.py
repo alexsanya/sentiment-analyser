@@ -10,7 +10,7 @@ import re
 from datetime import datetime
 from typing import Dict, Any, List, Union, Optional
 from urllib.parse import urlparse
-from schemas import TweetOutput, DataSource
+from ..models.schemas import TweetOutput, DataSource
 
 def extract_url(text: str) -> str:
     """Extract URL from markdown-style links with security validation.

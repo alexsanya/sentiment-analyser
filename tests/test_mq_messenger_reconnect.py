@@ -3,7 +3,7 @@
 import pytest
 import logging
 from unittest.mock import Mock, patch, MagicMock
-from mq_messenger import MQMessenger
+from src.core.mq_messenger import MQMessenger
 import pika
 
 
@@ -38,7 +38,7 @@ class TestMQMessengerReconnect:
         with patch.object(messenger, '_cleanup_connection') as mock_cleanup, \
              patch.object(messenger, '_create_connection') as mock_create, \
              patch.object(messenger, 'is_connected', return_value=True) as mock_is_connected, \
-             patch('mq_messenger.logger') as mock_logger:
+             patch('src.core.mq_messenger.logger') as mock_logger:
             
             result = messenger.reconnect()
             
@@ -57,7 +57,7 @@ class TestMQMessengerReconnect:
         with patch.object(messenger, '_cleanup_connection') as mock_cleanup, \
              patch.object(messenger, '_create_connection') as mock_create, \
              patch.object(messenger, 'is_connected', return_value=False) as mock_is_connected, \
-             patch('mq_messenger.logger') as mock_logger:
+             patch('src.core.mq_messenger.logger') as mock_logger:
             
             result = messenger.reconnect()
             
@@ -76,7 +76,7 @@ class TestMQMessengerReconnect:
         
         with patch.object(messenger, '_cleanup_connection') as mock_cleanup, \
              patch.object(messenger, '_create_connection', side_effect=test_exception) as mock_create, \
-             patch('mq_messenger.logger') as mock_logger:
+             patch('src.core.mq_messenger.logger') as mock_logger:
             
             result = messenger.reconnect()
             
@@ -93,7 +93,7 @@ class TestMQMessengerReconnect:
         cleanup_exception = Exception("Cleanup failed")
         
         with patch.object(messenger, '_cleanup_connection', side_effect=cleanup_exception) as mock_cleanup, \
-             patch('mq_messenger.logger') as mock_logger:
+             patch('src.core.mq_messenger.logger') as mock_logger:
             
             result = messenger.reconnect()
             
@@ -111,7 +111,7 @@ class TestMQMessengerReconnect:
         with patch.object(messenger, '_cleanup_connection') as mock_cleanup, \
              patch.object(messenger, '_create_connection') as mock_create, \
              patch.object(messenger, 'is_connected', side_effect=test_exception) as mock_is_connected, \
-             patch('mq_messenger.logger') as mock_logger:
+             patch('src.core.mq_messenger.logger') as mock_logger:
             
             result = messenger.reconnect()
             
@@ -191,7 +191,7 @@ class TestMQMessengerReconnect:
         with patch.object(messenger, '_cleanup_connection') as mock_cleanup, \
              patch.object(messenger, '_create_connection') as mock_create, \
              patch.object(messenger, 'is_connected', return_value=True) as mock_is_connected, \
-             patch('mq_messenger.logger') as mock_logger:
+             patch('src.core.mq_messenger.logger') as mock_logger:
             
             result = messenger.reconnect()
             
@@ -208,7 +208,7 @@ class TestMQMessengerReconnect:
         
         with patch.object(messenger, '_cleanup_connection') as mock_cleanup, \
              patch.object(messenger, '_create_connection', side_effect=test_exception) as mock_create, \
-             patch('mq_messenger.logger') as mock_logger:
+             patch('src.core.mq_messenger.logger') as mock_logger:
             
             result = messenger.reconnect()
             
