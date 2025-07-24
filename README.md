@@ -1,5 +1,7 @@
 # News-Powered Trading Signals - News watcher
 
+![Cover picture](cover.png)
+
 The first microservice in multi-module real-time news monitoring and trading signal generation system.
 Connects to third-party provider via WebSocket to capture market-relevant tweets in real time for sentiment analysis and automated trading decisions.
 
