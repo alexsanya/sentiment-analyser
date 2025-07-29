@@ -24,8 +24,8 @@ class TestRabbitMQConnectionMonitor:
     """Test cases for RabbitMQ connection monitoring."""
     
     @pytest.fixture
-    def mock_mq_messenger(self):
-        """Create a mock MQMessenger for testing."""
+    def mock_mq_subscriber(self):
+        """Create a mock MQSubscriber for testing."""
         mock = Mock()
         mock.is_connected.return_value = True
         mock.test_connection.return_value = True
@@ -35,20 +35,20 @@ class TestRabbitMQConnectionMonitor:
         return mock
     
     @pytest.fixture
-    def monitor(self, mock_mq_messenger):
+    def monitor(self, mock_mq_subscriber):
         """Create a RabbitMQConnectionMonitor instance for testing."""
         return RabbitMQConnectionMonitor(
-            mq_messenger=mock_mq_messenger,
+            mq_subscriber=mock_mq_subscriber,
             check_interval=1,  # Short interval for testing
             max_retry_attempts=3,
             retry_delay=0.1  # Short delay for testing
         )
     
-    def test_monitor_initialization(self, mock_mq_messenger):
+    def test_monitor_initialization(self, mock_mq_subscriber):
         """Test monitor initialization with default parameters."""
-        monitor = RabbitMQConnectionMonitor(mock_mq_messenger)
+        monitor = RabbitMQConnectionMonitor(mock_mq_subscriber)
         
-        assert monitor.mq_messenger is mock_mq_messenger
+        assert monitor.mq_subscriber is mock_mq_subscriber
         assert monitor.check_interval == 30
         assert monitor.max_retry_attempts == 3
         assert monitor.retry_delay == 5
@@ -56,10 +56,10 @@ class TestRabbitMQConnectionMonitor:
         assert monitor._last_connection_status is True
         assert monitor._consecutive_failures == 0
     
-    def test_monitor_initialization_with_custom_params(self, mock_mq_messenger):
+    def test_monitor_initialization_with_custom_params(self, mock_mq_subscriber):
         """Test monitor initialization with custom parameters."""
         monitor = RabbitMQConnectionMonitor(
-            mq_messenger=mock_mq_messenger,
+            mq_subscriber=mock_mq_subscriber,
             check_interval=10,
             max_retry_attempts=5,
             retry_delay=2
@@ -69,23 +69,23 @@ class TestRabbitMQConnectionMonitor:
         assert monitor.max_retry_attempts == 5
         assert monitor.retry_delay == 2
     
-    def test_from_env_factory_method(self, mock_mq_messenger):
+    def test_from_env_factory_method(self, mock_mq_subscriber):
         """Test creation from environment variables."""
         with patch.dict(os.environ, {
             'RABBITMQ_MONITOR_INTERVAL': '45',
             'RABBITMQ_MAX_RETRY_ATTEMPTS': '7',
             'RABBITMQ_RETRY_DELAY': '10'
         }):
-            monitor = RabbitMQConnectionMonitor.from_env(mock_mq_messenger)
+            monitor = RabbitMQConnectionMonitor.from_env(mock_mq_subscriber)
             
             assert monitor.check_interval == 45
             assert monitor.max_retry_attempts == 7
             assert monitor.retry_delay == 10
     
-    def test_from_env_with_defaults(self, mock_mq_messenger):
+    def test_from_env_with_defaults(self, mock_mq_subscriber):
         """Test creation from environment with default values."""
         with patch.dict(os.environ, {}, clear=True):
-            monitor = RabbitMQConnectionMonitor.from_env(mock_mq_messenger)
+            monitor = RabbitMQConnectionMonitor.from_env(mock_mq_subscriber)
             
             assert monitor.check_interval == 30
             assert monitor.max_retry_attempts == 3
@@ -142,79 +142,79 @@ class TestRabbitMQConnectionMonitor:
         
         assert not monitor._is_running
     
-    def test_connection_health_check_success(self, monitor, mock_mq_messenger):
+    def test_connection_health_check_success(self, monitor, mock_mq_subscriber):
         """Test successful connection health check."""
-        mock_mq_messenger.is_connected.return_value = True
-        mock_mq_messenger.test_connection.return_value = True
+        mock_mq_subscriber.is_connected.return_value = True
+        mock_mq_subscriber.test_connection.return_value = True
         
         monitor._check_and_handle_connection()
         
         assert monitor._consecutive_failures == 0
         assert monitor._last_connection_status is True
-        mock_mq_messenger.is_connected.assert_called_once()
-        mock_mq_messenger.test_connection.assert_called_once()
+        mock_mq_subscriber.is_connected.assert_called_once()
+        mock_mq_subscriber.test_connection.assert_called_once()
     
-    def test_connection_health_check_failure(self, monitor, mock_mq_messenger):
+    def test_connection_health_check_failure(self, monitor, mock_mq_subscriber):
         """Test connection health check failure."""
-        mock_mq_messenger.is_connected.return_value = False
-        mock_mq_messenger.test_connection.return_value = False
-        mock_mq_messenger.reconnect.return_value = True
+        mock_mq_subscriber.is_connected.return_value = False
+        mock_mq_subscriber.test_connection.return_value = False
+        mock_mq_subscriber.reconnect.return_value = True
         
         monitor._check_and_handle_connection()
         
         assert monitor._consecutive_failures == 0  # Reset after successful reconnect
-        mock_mq_messenger.reconnect.assert_called_once()
+        mock_mq_subscriber.reconnect.assert_called_once()
     
-    def test_connection_test_failure(self, monitor, mock_mq_messenger):
+    def test_connection_test_failure(self, monitor, mock_mq_subscriber):
         """Test when connection exists but test fails."""
-        mock_mq_messenger.is_connected.return_value = True
-        mock_mq_messenger.test_connection.return_value = False
-        mock_mq_messenger.reconnect.return_value = True
+        mock_mq_subscriber.is_connected.return_value = True
+        mock_mq_subscriber.test_connection.return_value = False
+        mock_mq_subscriber.reconnect.return_value = True
         
         monitor._check_and_handle_connection()
         
         assert monitor._consecutive_failures == 0  # Reset after successful reconnect
-        mock_mq_messenger.reconnect.assert_called_once()
+        mock_mq_subscriber.reconnect.assert_called_once()
     
-    def test_reconnection_attempt_success(self, monitor, mock_mq_messenger):
+    def test_reconnection_attempt_success(self, monitor, mock_mq_subscriber):
         """Test successful reconnection attempt."""
-        mock_mq_messenger.reconnect.return_value = True
+        mock_mq_subscriber.reconnect.return_value = True
         
         monitor._consecutive_failures = 1
         monitor._attempt_reconnection()
         
         assert monitor._consecutive_failures == 0
         assert monitor._last_connection_status is True
-        mock_mq_messenger.reconnect.assert_called_once()
+        mock_mq_subscriber.reconnect.assert_called_once()
     
-    def test_reconnection_attempt_failure(self, monitor, mock_mq_messenger):
+    def test_reconnection_attempt_failure(self, monitor, mock_mq_subscriber):
         """Test failed reconnection attempt."""
-        mock_mq_messenger.reconnect.return_value = False
+        mock_mq_subscriber.reconnect.return_value = False
         
         monitor._consecutive_failures = 1
         monitor._attempt_reconnection()
         
         assert monitor._consecutive_failures == 1  # No change on failure
-        mock_mq_messenger.reconnect.assert_called_once()
+        mock_mq_subscriber.reconnect.assert_called_once()
     
-    def test_reconnection_fallback_method(self, monitor, mock_mq_messenger):
+    def test_reconnection_fallback_method(self, monitor, mock_mq_subscriber):
         """Test fallback reconnection when reconnect method not available."""
         # Remove reconnect method to test fallback
-        delattr(mock_mq_messenger, 'reconnect')
-        mock_mq_messenger.test_connection.return_value = True
+        delattr(mock_mq_subscriber, 'reconnect')
+        mock_mq_subscriber.test_connection.return_value = True
         
         monitor._consecutive_failures = 1
         monitor._attempt_reconnection()
         
         assert monitor._consecutive_failures == 0
-        mock_mq_messenger.close.assert_called_once()
-        mock_mq_messenger.connect.assert_called_once()
-        mock_mq_messenger.test_connection.assert_called_once()
+        mock_mq_subscriber.close.assert_called_once()
+        mock_mq_subscriber.connect.assert_called_once()
+        mock_mq_subscriber.test_connection.assert_called_once()
     
-    def test_max_retry_attempts_exceeded(self, monitor, mock_mq_messenger):
+    def test_max_retry_attempts_exceeded(self, monitor, mock_mq_subscriber):
         """Test behavior when max retry attempts are exceeded."""
         with patch('src.core.rabbitmq_monitor.logger') as mock_logger:
-            mock_mq_messenger.reconnect.return_value = False
+            mock_mq_subscriber.reconnect.return_value = False
             
             monitor._consecutive_failures = 4  # Exceeds max of 3
             monitor._attempt_reconnection()
@@ -226,12 +226,12 @@ class TestRabbitMQConnectionMonitor:
             
             assert monitor._consecutive_failures == 4  # No change
             # Should not attempt reconnect
-            mock_mq_messenger.reconnect.assert_not_called()
+            mock_mq_subscriber.reconnect.assert_not_called()
     
-    def test_reconnection_exception_handling(self, monitor, mock_mq_messenger):
+    def test_reconnection_exception_handling(self, monitor, mock_mq_subscriber):
         """Test exception handling during reconnection."""
         with patch('src.core.rabbitmq_monitor.logger') as mock_logger:
-            mock_mq_messenger.reconnect.side_effect = Exception("Connection failed")
+            mock_mq_subscriber.reconnect.side_effect = Exception("Connection failed")
             
             monitor._consecutive_failures = 1
             monitor._attempt_reconnection()
@@ -261,20 +261,20 @@ class TestRabbitMQConnectionMonitor:
         
         assert status == expected
     
-    def test_monitor_loop_integration(self, mock_mq_messenger):
+    def test_monitor_loop_integration(self, mock_mq_subscriber):
         """Test the complete monitoring loop integration."""
         with patch('src.core.rabbitmq_monitor.logger') as mock_logger:
             monitor = RabbitMQConnectionMonitor(
-                mq_messenger=mock_mq_messenger,
+                mq_subscriber=mock_mq_subscriber,
                 check_interval=0.1,  # Very short for testing
                 max_retry_attempts=3,
                 retry_delay=0.01
             )
             
             # Simulate successful connection consistently
-            mock_mq_messenger.is_connected.return_value = True
-            mock_mq_messenger.test_connection.return_value = True
-            mock_mq_messenger.reconnect.return_value = True
+            mock_mq_subscriber.is_connected.return_value = True
+            mock_mq_subscriber.test_connection.return_value = True
+            mock_mq_subscriber.reconnect.return_value = True
             
             monitor.start()
             
@@ -288,18 +288,18 @@ class TestRabbitMQConnectionMonitor:
             assert any("Connection monitoring loop started" in msg for msg in log_calls)
             assert any("Connection monitoring loop ended" in msg for msg in log_calls)
     
-    def test_connection_status_change_logging(self, monitor, mock_mq_messenger):
+    def test_connection_status_change_logging(self, monitor, mock_mq_subscriber):
         """Test logging of connection status changes."""
         with patch('src.core.rabbitmq_monitor.logger') as mock_logger:
             # Start with good connection
-            mock_mq_messenger.is_connected.return_value = True
-            mock_mq_messenger.test_connection.return_value = True
+            mock_mq_subscriber.is_connected.return_value = True
+            mock_mq_subscriber.test_connection.return_value = True
             monitor._last_connection_status = True
             
             # Simulate connection failure
-            mock_mq_messenger.is_connected.return_value = False
-            mock_mq_messenger.test_connection.return_value = False
-            mock_mq_messenger.reconnect.return_value = True
+            mock_mq_subscriber.is_connected.return_value = False
+            mock_mq_subscriber.test_connection.return_value = False
+            mock_mq_subscriber.reconnect.return_value = True
             
             monitor._check_and_handle_connection()
             
@@ -309,8 +309,8 @@ class TestRabbitMQConnectionMonitor:
             
             # Reset mock and simulate recovery
             mock_logger.reset_mock()
-            mock_mq_messenger.is_connected.return_value = True
-            mock_mq_messenger.test_connection.return_value = True
+            mock_mq_subscriber.is_connected.return_value = True
+            mock_mq_subscriber.test_connection.return_value = True
             monitor._last_connection_status = False  # Simulate it was false
             
             monitor._check_and_handle_connection()

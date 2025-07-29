@@ -1,44 +1,40 @@
 import os
 import signal
+import time
 from typing import Any, Optional
 from dotenv import load_dotenv
 from src.config.logging_config import setup_logging, get_logger
-from src.core.websocket_manager import WebSocketManager
-from src.core.mq_messenger import MQMessenger
+from src.core.mq_subscriber import MQSubscriber
 from src.core.rabbitmq_monitor import RabbitMQConnectionMonitor
-from src.handlers import (
-    on_error,
-    on_close,
-    on_open
-)
 
 # Initialize module-level logger
 setup_logging()  # Auto-detects environment
 logger = get_logger(__name__)
 
-# Removed global MQMessenger instance - now using dependency injection
+# Global shutdown flag
+shutdown_requested = False
 
 
-def initialize_rabbitmq() -> MQMessenger:
+def initialize_rabbitmq() -> MQSubscriber:
     """Initialize and test RabbitMQ connection at startup.
     
     Returns:
-        MQMessenger: Successfully connected and validated MQMessenger instance
+        MQSubscriber: Successfully connected and validated MQSubscriber instance
         
     Raises:
         SystemExit: If RabbitMQ connection cannot be established or validated
     """
     try:
         logger.info("Initializing RabbitMQ connection...")
-        messenger = MQMessenger.from_env(connect_on_init=True)
+        subscriber = MQSubscriber.from_env(connect_on_init=True)
         
         # Test the connection
-        if not messenger.test_connection():
+        if not subscriber.test_connection():
             logger.error("RabbitMQ connection test failed - shutting down")
             raise Exception("RabbitMQ connection validation failed")
         
         logger.info("RabbitMQ connection validated successfully")
-        return messenger
+        return subscriber
         
     except Exception as e:
         logger.error(
@@ -47,61 +43,88 @@ def initialize_rabbitmq() -> MQMessenger:
         )
         raise SystemExit(1)
 
-def initialize_rabbitmq_monitor(mq_messenger: MQMessenger) -> Optional[RabbitMQConnectionMonitor]:
+def initialize_rabbitmq_monitor(mq_subscriber: MQSubscriber) -> Optional[RabbitMQConnectionMonitor]:
+    """Initialize RabbitMQ connection monitor if enabled."""
     if os.getenv("RABBITMQ_MONITOR_ENABLED", "true").lower() == "true":
-        connection_monitor = RabbitMQConnectionMonitor.from_env(mq_messenger)
+        connection_monitor = RabbitMQConnectionMonitor.from_env(mq_subscriber)
         connection_monitor.start()
         logger.info("RabbitMQ connection monitoring enabled")
+        return connection_monitor
     else:
         logger.info("RabbitMQ connection monitoring disabled")
-    return connection_monitor
+        return None
 
-# Main function
-def main(x_api_key: str) -> None:
+def message_handler(channel, method, properties, body):
+    """Simple message handler that logs incoming messages."""
+    try:
+        message = body.decode('utf-8')
+        logger.info(
+            "Received message from RabbitMQ",
+            routing_key=method.routing_key,
+            exchange=method.exchange,
+            message_size=len(message),
+            message_preview=message[:200] + "..." if len(message) > 200 else message
+        )
+        
+        # Acknowledge the message
+        channel.basic_ack(delivery_tag=method.delivery_tag)
+        
+    except Exception as e:
+        logger.error(
+            "Error processing message",
+            error=str(e),
+            routing_key=method.routing_key
+        )
+        # Reject the message without requeue to avoid infinite loops
+        channel.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+
+def shutdown_handler(signum: int, frame: Any) -> None:
+    """Handle shutdown signals gracefully."""
+    global shutdown_requested
+    logger.info("Shutdown signal received, cleaning up...")
+    shutdown_requested = True
+
+def main() -> None:
+    """Main application entry point."""
+    global shutdown_requested
+    
     environment = os.getenv("ENVIRONMENT", "development")
-    logger.info("Starting news-powered trading system", environment=environment)
+    logger.info("Starting RabbitMQ message processor", environment=environment)
     
     # Initialize and test RabbitMQ connection at startup
-    mq_messenger = initialize_rabbitmq()
+    mq_subscriber = initialize_rabbitmq()
     
     # Initialize RabbitMQ connection monitor
-    connection_monitor: Optional[RabbitMQConnectionMonitor] = initialize_rabbitmq_monitor(mq_messenger)
+    connection_monitor: Optional[RabbitMQConnectionMonitor] = initialize_rabbitmq_monitor(mq_subscriber)
     
-    # Create WebSocket manager with callback functions and MQ messenger
-    ws_manager = WebSocketManager(None, on_error, on_close, on_open, mq_messenger)
+    # Register signal handler for graceful shutdown
+    signal.signal(signal.SIGINT, shutdown_handler)
+    signal.signal(signal.SIGTERM, shutdown_handler)
+    logger.info("Signal handlers registered for graceful shutdown")
     
-    # Register signal handler for graceful shutdown using the manager
-    def shutdown_handler(signum: int, frame: Any) -> None:
-        logger.info("Shutdown signal received, cleaning up...")
+    try:
+        # Set up message handler and start consuming
+        mq_subscriber.set_message_handler(message_handler)
+        mq_subscriber.start_consuming()
         
-        # Stop connection monitor first
+        logger.info("Application started and consuming messages. Press Ctrl+C to shutdown.")
+        
+        while not shutdown_requested:
+            time.sleep(1)
+            
+    except KeyboardInterrupt:
+        logger.info("Keyboard interrupt received")
+        shutdown_requested = True
+    
+    finally:
+        logger.info("Application shutting down")
+        
+        # Cleanup resources
         if connection_monitor:
             connection_monitor.stop()
-        
-        # Then shutdown WebSocket manager
-        ws_manager._signal_handler(signum, frame)
-        
-        # Finally close MQ connection
-        if mq_messenger:
-            mq_messenger.close()
-    
-    signal.signal(signal.SIGINT, shutdown_handler)
-    logger.info("Signal handler registered for graceful shutdown")
-    
-    url = "wss://ws.twitterapi.io/twitter/tweet/websocket"
-    headers = {"x-api-key": x_api_key}
-    
-    logger.info("Connecting to Twitter.io WebSocket", url=url)
-    ws_manager.connect(url, headers)
-    
-    logger.info("Application shutting down")
-    
-    # Cleanup resources
-    if connection_monitor:
-        connection_monitor.stop()
-    if mq_messenger:
-        mq_messenger.close()
+        if mq_subscriber:
+            mq_subscriber.close()
 
 if __name__ == "__main__":
     load_dotenv()
-    main(os.environ["TWITTERAPI_KEY"])
+    main()

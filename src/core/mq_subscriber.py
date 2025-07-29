@@ -1,10 +1,11 @@
-"""RabbitMQ messenger service for publishing JSON messages."""
+"""RabbitMQ subscriber service for consuming and publishing JSON messages."""
 
 import json
 import os
 import time
+import threading
 from collections import deque
-from typing import Dict, Any, Optional, List, Union
+from typing import Dict, Any, Optional, List, Union, Callable
 import pika
 from pika.adapters.blocking_connection import BlockingChannel
 from pika.connection import Connection
@@ -16,8 +17,8 @@ from ..models.schemas import TweetOutput
 logger = get_logger(__name__)
 
 
-class MQMessenger:
-    """RabbitMQ messenger for publishing JSON messages with connection management."""
+class MQSubscriber:
+    """RabbitMQ subscriber for consuming and publishing JSON messages with connection management."""
     
     def __init__(
         self,
@@ -27,9 +28,10 @@ class MQMessenger:
         username: Optional[str] = None,
         password: Optional[str] = None,
         connect_on_init: bool = False,
-        message_buffer: Optional[MessageBuffer] = None
+        message_buffer: Optional[MessageBuffer] = None,
+        consume_queue: Optional[str] = None
     ) -> None:
-        """Initialize MQMessenger with connection parameters.
+        """Initialize MQSubscriber with connection parameters.
         
         Args:
             host: RabbitMQ server host
@@ -39,21 +41,30 @@ class MQMessenger:
             password: Optional password for authentication
             connect_on_init: If True, establish connection immediately
             message_buffer: Optional MessageBuffer instance for storing messages during outages
+            consume_queue: Optional queue name to consume from (defaults to queue_name)
         """
         self.host = host
         self.port = port
         self.queue_name = queue_name
+        self.consume_queue = consume_queue or queue_name
         self.username = username
         self.password = password
         self._connection: Optional[Connection] = None
         self._channel: Optional[BlockingChannel] = None
         self.message_buffer = message_buffer if message_buffer is not None else MessageBuffer.from_env()
         
+        # Consumer-related attributes
+        self._consumer_thread: Optional[threading.Thread] = None
+        self._consumer_tag: Optional[str] = None
+        self._stop_consuming = threading.Event()
+        self._message_handler: Optional[Callable] = None
+        
         logger.info(
-            "MQMessenger initialized",
+            "MQSubscriber initialized",
             host=self.host,
             port=self.port,
             queue_name=self.queue_name,
+            consume_queue=self.consume_queue,
             authenticated=bool(self.username),
             buffer_enabled=self.message_buffer.enabled,
             buffer_size=self.message_buffer.max_size
@@ -63,15 +74,16 @@ class MQMessenger:
             self.connect()
     
     @classmethod
-    def from_env(cls, connect_on_init: bool = False) -> "MQMessenger":
-        """Create MQMessenger instance from environment variables."""
+    def from_env(cls, connect_on_init: bool = False) -> "MQSubscriber":
+        """Create MQSubscriber instance from environment variables."""
         return cls(
             host=os.getenv("RABBITMQ_HOST", "localhost"),
             port=int(os.getenv("RABBITMQ_PORT", "5672")),
             queue_name=os.getenv("RABBITMQ_QUEUE", "tweet_events"),
             username=os.getenv("RABBITMQ_USERNAME"),
             password=os.getenv("RABBITMQ_PASSWORD"),
-            connect_on_init=connect_on_init
+            connect_on_init=connect_on_init,
+            consume_queue=os.getenv("RABBITMQ_CONSUME_QUEUE")
         )
     
     def _create_connection(self) -> None:
@@ -401,12 +413,131 @@ class MQMessenger:
         """
         return self.message_buffer.get_status()
     
+    def set_message_handler(self, handler: Callable) -> None:
+        """Set the message handler for consuming messages.
+        
+        Args:
+            handler: Callback function with signature (channel, method, properties, body)
+        """
+        self._message_handler = handler
+        logger.info("Message handler set for consumption")
+    
+    def _consume_messages(self) -> None:
+        """Internal method to consume messages in a separate thread."""
+        try:
+            logger.info("Starting message consumption", consume_queue=self.consume_queue)
+            
+            # Ensure connection is established
+            self._ensure_connection()
+            
+            # Declare the consume queue
+            self._channel.queue_declare(queue=self.consume_queue, durable=True)
+            
+            # Set up consumer
+            def wrapper_callback(channel, method, properties, body):
+                if not self._stop_consuming.is_set() and self._message_handler:
+                    try:
+                        self._message_handler(channel, method, properties, body)
+                    except Exception as e:
+                        logger.error(
+                            "Error in message handler",
+                            error=str(e),
+                            routing_key=method.routing_key
+                        )
+                        # Reject the message to avoid infinite loops
+                        channel.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+            
+            # Start consuming
+            self._consumer_tag = self._channel.basic_consume(
+                queue=self.consume_queue,
+                on_message_callback=wrapper_callback
+            )
+            
+            logger.info("Message consumer started", consumer_tag=self._consumer_tag)
+            
+            # Keep consuming until stop signal
+            while not self._stop_consuming.is_set():
+                try:
+                    self._connection.process_data_events(time_limit=1)
+                except Exception as e:
+                    if not self._stop_consuming.is_set():
+                        logger.error("Error processing data events", error=str(e))
+                        break
+            
+            logger.info("Message consumption stopped")
+            
+        except Exception as e:
+            logger.error("Error in message consumption thread", error=str(e))
+        finally:
+            # Clean up consumer
+            if self._consumer_tag and self._channel and not self._channel.is_closed:
+                try:
+                    self._channel.basic_cancel(self._consumer_tag)
+                    logger.info("Consumer cancelled", consumer_tag=self._consumer_tag)
+                except Exception as e:
+                    logger.warning("Error cancelling consumer", error=str(e))
+            self._consumer_tag = None
+    
+    def start_consuming(self) -> None:
+        """Start consuming messages in a separate thread.
+        
+        Requires a message handler to be set via set_message_handler().
+        """
+        if not self._message_handler:
+            raise ValueError("Message handler must be set before starting consumption")
+        
+        if self._consumer_thread and self._consumer_thread.is_alive():
+            logger.warning("Consumer thread is already running")
+            return
+        
+        self._stop_consuming.clear()
+        self._consumer_thread = threading.Thread(target=self._consume_messages, daemon=True)
+        self._consumer_thread.start()
+        
+        logger.info("Consumer thread started")
+    
+    def stop_consuming(self) -> None:
+        """Stop consuming messages and wait for consumer thread to finish."""
+        if not self._consumer_thread or not self._consumer_thread.is_alive():
+            logger.info("Consumer thread is not running")
+            return
+        
+        logger.info("Stopping message consumption...")
+        self._stop_consuming.set()
+        
+        # Wait for consumer thread to finish
+        if self._consumer_thread:
+            self._consumer_thread.join(timeout=5)
+            if self._consumer_thread.is_alive():
+                logger.warning("Consumer thread did not stop within timeout")
+            else:
+                logger.info("Consumer thread stopped successfully")
+        
+        self._consumer_thread = None
+    
+    def is_consuming(self) -> bool:
+        """Check if currently consuming messages.
+        
+        Returns:
+            bool: True if consumer thread is active, False otherwise
+        """
+        return (
+            self._consumer_thread is not None and 
+            self._consumer_thread.is_alive() and 
+            not self._stop_consuming.is_set()
+        )
+    
     def close(self) -> None:
         """Close connection and clean up resources."""
-        logger.info("Closing MQMessenger connection")
+        logger.info("Closing MQSubscriber connection")
+        
+        # Stop consuming first
+        self.stop_consuming()
+        
+        # Then cleanup connection
         self._cleanup_connection()
     
-    def __enter__(self) -> "MQMessenger":
+    def __enter__(self) -> "MQSubscriber":
         """Context manager entry."""
         return self
     
