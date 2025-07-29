@@ -14,7 +14,7 @@ class RabbitMQConnectionMonitor:
     
     def __init__(
         self,
-        mq_messenger: 'MQMessenger',
+        mq_subscriber: 'MQSubscriber',
         check_interval: int = 30,
         max_retry_attempts: int = 3,
         retry_delay: int = 5
@@ -22,12 +22,12 @@ class RabbitMQConnectionMonitor:
         """Initialize RabbitMQ connection monitor.
         
         Args:
-            mq_messenger: MQMessenger instance to monitor
+            mq_subscriber: MQSubscriber instance to monitor
             check_interval: Seconds between connection health checks
             max_retry_attempts: Maximum reconnection attempts before giving up
             retry_delay: Seconds to wait between reconnection attempts
         """
-        self.mq_messenger = mq_messenger
+        self.mq_subscriber = mq_subscriber
         self.check_interval = check_interval
         self.max_retry_attempts = max_retry_attempts
         self.retry_delay = retry_delay
@@ -49,10 +49,10 @@ class RabbitMQConnectionMonitor:
         )
     
     @classmethod
-    def from_env(cls, mq_messenger: 'MQMessenger') -> 'RabbitMQConnectionMonitor':
+    def from_env(cls, mq_subscriber: 'MQSubscriber') -> 'RabbitMQConnectionMonitor':
         """Create monitor instance from environment variables."""
         return cls(
-            mq_messenger=mq_messenger,
+            mq_subscriber=mq_subscriber,
             check_interval=int(os.getenv("RABBITMQ_MONITOR_INTERVAL", "30")),
             max_retry_attempts=int(os.getenv("RABBITMQ_MAX_RETRY_ATTEMPTS", "3")),
             retry_delay=int(os.getenv("RABBITMQ_RETRY_DELAY", "5"))
@@ -118,12 +118,12 @@ class RabbitMQConnectionMonitor:
         """Check connection health and handle reconnection if needed."""
         try:
             # Test connection using existing method
-            is_connected = self.mq_messenger.is_connected()
+            is_connected = self.mq_subscriber.is_connected()
             connection_test_passed = False
             
             if is_connected:
                 # Perform actual connection test
-                connection_test_passed = self.mq_messenger.test_connection()
+                connection_test_passed = self.mq_subscriber.test_connection()
             
             current_status = is_connected and connection_test_passed
             
@@ -178,8 +178,8 @@ class RabbitMQConnectionMonitor:
         
         try:
             # Use the reconnect method (to be implemented in MQMessenger)
-            if hasattr(self.mq_messenger, 'reconnect'):
-                success = self.mq_messenger.reconnect()
+            if hasattr(self.mq_subscriber, 'reconnect'):
+                success = self.mq_subscriber.reconnect()
                 if success:
                     logger.info("RabbitMQ reconnection successful")
                     self._consecutive_failures = 0
@@ -190,12 +190,12 @@ class RabbitMQConnectionMonitor:
                     return
             else:
                 # Fallback to close and connect
-                logger.warning("MQMessenger.reconnect() not available, using fallback method")
-                self.mq_messenger.close()
-                self.mq_messenger.connect()
+                logger.warning("MQSubscriber.reconnect() not available, using fallback method")
+                self.mq_subscriber.close()
+                self.mq_subscriber.connect()
                 
                 # Test the new connection
-                if self.mq_messenger.test_connection():
+                if self.mq_subscriber.test_connection():
                     logger.info("RabbitMQ reconnection successful (fallback method)")
                     self._consecutive_failures = 0
                     self._last_connection_status = True
@@ -219,8 +219,8 @@ class RabbitMQConnectionMonitor:
     def _flush_message_buffer(self) -> None:
         """Attempt to flush message buffer after successful connection restore."""
         try:
-            if hasattr(self.mq_messenger, 'flush_buffer'):
-                flushed_count = self.mq_messenger.flush_buffer()
+            if hasattr(self.mq_subscriber, 'flush_buffer'):
+                flushed_count = self.mq_subscriber.flush_buffer()
                 if flushed_count > 0:
                     logger.info(
                         "Message buffer flushed after connection restore",

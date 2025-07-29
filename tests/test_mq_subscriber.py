@@ -1,18 +1,18 @@
-"""Unit tests for MQMessenger class."""
+"""Unit tests for MQSubscriber class."""
 
 import json
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 import pika
-from src.core.mq_messenger import MQMessenger
+from src.core.mq_subscriber import MQSubscriber
 from src.core.message_buffer import MessageBuffer
 
 
-class TestMQMessengerInitialization:
-    """Test MQMessenger initialization and configuration."""
+class TestMQSubscriberInitialization:
+    """Test MQSubscriber initialization and configuration."""
     
     def test_init_with_default_parameters(self):
-        messenger = MQMessenger()
+        messenger = MQSubscriber()
         assert messenger.host == "localhost"
         assert messenger.port == 5672
         assert messenger.queue_name == "tweet_events"
@@ -20,7 +20,7 @@ class TestMQMessengerInitialization:
         assert messenger.password is None
     
     def test_init_with_custom_parameters(self):
-        messenger = MQMessenger(
+        messenger = MQSubscriber(
             host="test.rabbitmq.com",
             port=5673,
             queue_name="custom_queue",
@@ -40,7 +40,7 @@ class TestMQMessengerInitialization:
         mock_conn.channel.return_value = mock_channel
         mock_connection.return_value = mock_conn
         
-        messenger = MQMessenger(connect_on_init=True)
+        messenger = MQSubscriber(connect_on_init=True)
         
         mock_connection.assert_called_once()
         mock_channel.queue_declare.assert_called_once_with(queue="tweet_events", durable=True)
@@ -55,7 +55,7 @@ class TestMQMessengerInitialization:
         "RABBITMQ_PASSWORD": "env_pass"
     })
     def test_from_env(self):
-        messenger = MQMessenger.from_env()
+        messenger = MQSubscriber.from_env()
         assert messenger.host == "env.rabbitmq.com"
         assert messenger.port == 5674
         assert messenger.queue_name == "env_queue"
@@ -64,7 +64,7 @@ class TestMQMessengerInitialization:
     
     @patch.dict("os.environ", {}, clear=True)
     def test_from_env_with_defaults(self):
-        messenger = MQMessenger.from_env()
+        messenger = MQSubscriber.from_env()
         assert messenger.host == "localhost"
         assert messenger.port == 5672
         assert messenger.queue_name == "tweet_events"
@@ -79,15 +79,15 @@ class TestMQMessengerInitialization:
         mock_conn.channel.return_value = mock_channel
         mock_connection.return_value = mock_conn
         
-        messenger = MQMessenger.from_env(connect_on_init=True)
+        messenger = MQSubscriber.from_env(connect_on_init=True)
         
         assert messenger.host == "test.host"
         mock_connection.assert_called_once()
         mock_channel.queue_declare.assert_called_once()
 
 
-class TestMQMessengerConnection:
-    """Test MQMessenger connection management."""
+class TestMQSubscriberConnection:
+    """Test MQSubscriber connection management."""
     
     @patch("pika.BlockingConnection")
     def test_create_connection_without_auth(self, mock_connection):
@@ -96,7 +96,7 @@ class TestMQMessengerConnection:
         mock_conn.channel.return_value = mock_channel
         mock_connection.return_value = mock_conn
         
-        messenger = MQMessenger()
+        messenger = MQSubscriber()
         messenger._create_connection()
         
         mock_connection.assert_called_once()
@@ -118,7 +118,7 @@ class TestMQMessengerConnection:
         mock_params = Mock()
         mock_connection_params.return_value = mock_params
         
-        messenger = MQMessenger(username="user", password="pass")
+        messenger = MQSubscriber(username="user", password="pass")
         messenger._create_connection()
         
         mock_credentials.assert_called_once_with("user", "pass")
@@ -135,7 +135,7 @@ class TestMQMessengerConnection:
     def test_create_connection_failure(self, mock_connection):
         mock_connection.side_effect = Exception("Connection failed")
         
-        messenger = MQMessenger()
+        messenger = MQSubscriber()
         with pytest.raises(Exception, match="Connection failed"):
             messenger._create_connection()
         
@@ -143,7 +143,7 @@ class TestMQMessengerConnection:
         assert messenger._channel is None
     
     def test_cleanup_connection(self):
-        messenger = MQMessenger()
+        messenger = MQSubscriber()
         mock_channel = Mock()
         mock_connection = Mock()
         mock_channel.is_closed = False
@@ -160,7 +160,7 @@ class TestMQMessengerConnection:
         assert messenger._connection is None
     
     def test_cleanup_connection_with_closed_resources(self):
-        messenger = MQMessenger()
+        messenger = MQSubscriber()
         mock_channel = Mock()
         mock_connection = Mock()
         mock_channel.is_closed = True
@@ -177,8 +177,8 @@ class TestMQMessengerConnection:
         assert messenger._connection is None
 
 
-class TestMQMessengerPublish:
-    """Test MQMessenger message publishing functionality."""
+class TestMQSubscriberPublish:
+    """Test MQSubscriber message publishing functionality."""
     
     @patch("pika.BlockingConnection")
     def test_publish_success(self, mock_connection):
@@ -189,7 +189,7 @@ class TestMQMessengerPublish:
         mock_channel.is_closed = False
         mock_connection.return_value = mock_conn
         
-        messenger = MQMessenger()
+        messenger = MQSubscriber()
         messenger._connection = mock_conn
         messenger._channel = mock_channel
         
@@ -221,7 +221,7 @@ class TestMQMessengerPublish:
         mock_channel.is_closed = False
         mock_connection.return_value = mock_conn
         
-        messenger = MQMessenger()
+        messenger = MQSubscriber()
         test_message = {"text": "test tweet", "timestamp": 1234567890}
         result = messenger.publish(test_message)
         
@@ -234,14 +234,14 @@ class TestMQMessengerPublish:
     def test_publish_failure(self, mock_connection):
         mock_connection.side_effect = Exception("Publish failed")
         
-        messenger = MQMessenger()
+        messenger = MQSubscriber()
         test_message = {"text": "test tweet", "timestamp": 1234567890}
         result = messenger.publish(test_message)
         
         assert result is False
     
     def test_is_connected_true(self):
-        messenger = MQMessenger()
+        messenger = MQSubscriber()
         mock_conn = Mock()
         mock_channel = Mock()
         mock_conn.is_closed = False
@@ -253,11 +253,11 @@ class TestMQMessengerPublish:
         assert messenger.is_connected() is True
     
     def test_is_connected_false_no_connection(self):
-        messenger = MQMessenger()
+        messenger = MQSubscriber()
         assert messenger.is_connected() is False
     
     def test_is_connected_false_closed_connection(self):
-        messenger = MQMessenger()
+        messenger = MQSubscriber()
         mock_conn = Mock()
         mock_channel = Mock()
         mock_conn.is_closed = True
@@ -270,7 +270,7 @@ class TestMQMessengerPublish:
     
     def test_publish_validation_invalid_type(self):
         """Test publish raises ValueError for non-dict message."""
-        messenger = MQMessenger()
+        messenger = MQSubscriber()
         
         with pytest.raises(ValueError, match="Message must be a dictionary"):
             messenger.publish("not a dict")
@@ -283,7 +283,7 @@ class TestMQMessengerPublish:
     
     def test_publish_validation_empty_message(self):
         """Test publish raises ValueError for empty message."""
-        messenger = MQMessenger()
+        messenger = MQSubscriber()
         
         with pytest.raises(ValueError, match="Message cannot be empty"):
             messenger.publish({})
@@ -298,7 +298,7 @@ class TestMQMessengerPublish:
         mock_channel.is_closed = False
         mock_connection.return_value = mock_conn
         
-        messenger = MQMessenger()
+        messenger = MQSubscriber()
         
         # Create a message that's too large (> 1MB)
         large_data = "x" * (1024 * 1024 + 1)  # Just over 1MB
@@ -309,7 +309,7 @@ class TestMQMessengerPublish:
     
     def test_publish_validation_schema_error(self):
         """Test publish raises ValueError for message that doesn't match schema."""
-        messenger = MQMessenger()
+        messenger = MQSubscriber()
         
         # Message with invalid field that can't be coerced (missing required structure)
         invalid_message = {"createdAt": "not_a_number"}  # This should fail int conversion
@@ -329,7 +329,7 @@ class TestMQMessengerPublish:
         mock_channel.is_closed = False
         mock_connection.return_value = mock_conn
         
-        messenger = MQMessenger()
+        messenger = MQSubscriber()
         
         # Create a TweetOutput object
         tweet_output = TweetOutput(
@@ -360,23 +360,23 @@ class TestMQMessengerPublish:
         assert published_data['data_source'] == {"name": "", "author_name": "", "author_id": ""}
 
 
-class TestMQMessengerContextManager:
-    """Test MQMessenger context manager functionality."""
+class TestMQSubscriberContextManager:
+    """Test MQSubscriber context manager functionality."""
     
     def test_context_manager(self):
-        with patch.object(MQMessenger, 'close') as mock_close:
-            with MQMessenger() as messenger:
-                assert isinstance(messenger, MQMessenger)
+        with patch.object(MQSubscriber, 'close') as mock_close:
+            with MQSubscriber() as messenger:
+                assert isinstance(messenger, MQSubscriber)
             mock_close.assert_called_once()
     
     def test_close_calls_cleanup(self):
-        messenger = MQMessenger()
+        messenger = MQSubscriber()
         with patch.object(messenger, '_cleanup_connection') as mock_cleanup:
             messenger.close()
             mock_cleanup.assert_called_once()
 
 
-class TestMQMessengerConnectionMethods:
+class TestMQSubscriberConnectionMethods:
     """Test new connection methods."""
     
     @patch("pika.BlockingConnection")
@@ -388,7 +388,7 @@ class TestMQMessengerConnectionMethods:
         mock_channel.is_closed = False
         mock_connection.return_value = mock_conn
         
-        messenger = MQMessenger()
+        messenger = MQSubscriber()
         messenger.connect()
         
         mock_connection.assert_called_once()
@@ -405,7 +405,7 @@ class TestMQMessengerConnectionMethods:
         mock_channel.is_closed = False
         mock_connection.return_value = mock_conn
         
-        messenger = MQMessenger()
+        messenger = MQSubscriber()
         result = messenger.test_connection()
         
         assert result is True
@@ -420,32 +420,32 @@ class TestMQMessengerConnectionMethods:
     def test_test_connection_failure(self, mock_connection):
         mock_connection.side_effect = Exception("Connection failed")
         
-        messenger = MQMessenger()
+        messenger = MQSubscriber()
         result = messenger.test_connection()
         
         assert result is False
 
 
-class TestMQMessengerBufferIntegration:
-    """Test MQMessenger integration with MessageBuffer."""
+class TestMQSubscriberBufferIntegration:
+    """Test MQSubscriber integration with MessageBuffer."""
     
     def test_initialization_with_default_buffer(self):
-        """Test MQMessenger initializes with default MessageBuffer."""
+        """Test MQSubscriber initializes with default MessageBuffer."""
         with patch('src.core.message_buffer.MessageBuffer.from_env') as mock_from_env:
             mock_buffer = Mock()
             mock_from_env.return_value = mock_buffer
             
-            messenger = MQMessenger()
+            messenger = MQSubscriber()
             
             mock_from_env.assert_called_once()
             assert messenger.message_buffer == mock_buffer
     
     def test_initialization_with_custom_buffer(self):
-        """Test MQMessenger initializes with custom MessageBuffer."""
+        """Test MQSubscriber initializes with custom MessageBuffer."""
         custom_buffer = MessageBuffer(max_size=5, enabled=False)
         
         # Test that custom buffer is used correctly
-        messenger = MQMessenger(message_buffer=custom_buffer)
+        messenger = MQSubscriber(message_buffer=custom_buffer)
         
         assert messenger.message_buffer == custom_buffer
         assert messenger.message_buffer.max_size == 5
@@ -462,7 +462,7 @@ class TestMQMessengerBufferIntegration:
         mock_connection.return_value = mock_conn
         
         mock_buffer = Mock()
-        messenger = MQMessenger(message_buffer=mock_buffer)
+        messenger = MQSubscriber(message_buffer=mock_buffer)
         messenger._connection = mock_conn
         messenger._channel = mock_channel
         
@@ -483,7 +483,7 @@ class TestMQMessengerBufferIntegration:
         mock_buffer.size.return_value = 1
         mock_buffer.max_size = 10
         
-        messenger = MQMessenger(message_buffer=mock_buffer)
+        messenger = MQSubscriber(message_buffer=mock_buffer)
         test_message = {"text": "test tweet", "timestamp": 1234567890}
         result = messenger.publish(test_message)
         
@@ -507,7 +507,7 @@ class TestMQMessengerBufferIntegration:
         mock_buffer.add_message.return_value = False
         mock_buffer.enabled = False
         
-        messenger = MQMessenger(message_buffer=mock_buffer)
+        messenger = MQSubscriber(message_buffer=mock_buffer)
         test_message = {"text": "test tweet", "timestamp": 1234567890}
         result = messenger.publish(test_message)
         
@@ -528,7 +528,7 @@ class TestMQMessengerBufferIntegration:
         mock_status = {"current_size": 3, "max_size": 10, "is_full": False}
         mock_buffer.get_status.return_value = mock_status
         
-        messenger = MQMessenger(message_buffer=mock_buffer)
+        messenger = MQSubscriber(message_buffer=mock_buffer)
         status = messenger.get_buffer_status()
         
         assert status == mock_status
@@ -540,7 +540,7 @@ class TestMQMessengerBufferIntegration:
         mock_buffer = Mock()
         mock_buffer.is_empty.return_value = True
         
-        messenger = MQMessenger(message_buffer=mock_buffer)
+        messenger = MQSubscriber(message_buffer=mock_buffer)
         result = messenger.flush_buffer()
         
         assert result == 0
@@ -566,7 +566,7 @@ class TestMQMessengerBufferIntegration:
         buffer.add_message(message1)
         buffer.add_message(message2)
         
-        messenger = MQMessenger(message_buffer=buffer)
+        messenger = MQSubscriber(message_buffer=buffer)
         result = messenger.flush_buffer()
         
         assert result == 2
@@ -596,7 +596,7 @@ class TestMQMessengerBufferIntegration:
         message2 = {"message": {"id": 2}, "timestamp": 1234567891.0, "buffer_sequence": 2}
         mock_buffer.pop_message.side_effect = [message1, message2]
         
-        messenger = MQMessenger(message_buffer=mock_buffer)
+        messenger = MQSubscriber(message_buffer=mock_buffer)
         
         with patch('src.core.mq_messenger.deque') as mock_deque_class:
             mock_temp_buffer = Mock()
@@ -623,7 +623,7 @@ class TestMQMessengerBufferIntegration:
         }
         mock_buffer._buffer = Mock()
         
-        messenger = MQMessenger(message_buffer=mock_buffer)
+        messenger = MQSubscriber(message_buffer=mock_buffer)
         
         with patch('src.core.mq_messenger.deque') as mock_deque_class:
             mock_temp_buffer = Mock()
@@ -635,8 +635,8 @@ class TestMQMessengerBufferIntegration:
         mock_buffer.pop_message.assert_called_once()
 
 
-class TestMQMessengerReconnection:
-    """Test MQMessenger reconnection functionality with buffer integration."""
+class TestMQSubscriberReconnection:
+    """Test MQSubscriber reconnection functionality with buffer integration."""
     
     @patch("pika.BlockingConnection")
     def test_reconnect_method(self, mock_connection):
@@ -648,7 +648,7 @@ class TestMQMessengerReconnection:
         mock_channel.is_closed = False
         mock_connection.return_value = mock_conn
         
-        messenger = MQMessenger()
+        messenger = MQSubscriber()
         
         # Mock existing connection for cleanup
         old_mock_conn = Mock()
@@ -670,7 +670,7 @@ class TestMQMessengerReconnection:
         """Test reconnect method handles failures gracefully."""
         mock_connection.side_effect = Exception("Reconnection failed")
         
-        messenger = MQMessenger()
+        messenger = MQSubscriber()
         result = messenger.reconnect()
         
         assert result is False

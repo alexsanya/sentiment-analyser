@@ -1,9 +1,9 @@
-"""Tests for MQMessenger reconnect functionality."""
+"""Tests for MQSubscriber reconnect functionality."""
 
 import pytest
 import logging
 from unittest.mock import Mock, patch, MagicMock
-from src.core.mq_messenger import MQMessenger
+from src.core.mq_subscriber import MQSubscriber
 import pika
 
 
@@ -18,13 +18,13 @@ def setup_test_logging():
     logging.getLogger().handlers.clear()
 
 
-class TestMQMessengerReconnect:
-    """Test cases for MQMessenger reconnect method."""
+class TestMQSubscriberReconnect:
+    """Test cases for MQSubscriber reconnect method."""
     
     @pytest.fixture
     def messenger(self):
-        """Create MQMessenger instance for testing."""
-        return MQMessenger(
+        """Create MQSubscriber instance for testing."""
+        return MQSubscriber(
             host="localhost",
             port=5672,
             queue_name="test_queue",
@@ -218,12 +218,12 @@ class TestMQMessengerReconnect:
             assert any("RabbitMQ reconnection failed" in msg for msg in error_calls)
 
 
-class TestMQMessengerReconnectEdgeCases:
+class TestMQSubscriberReconnectEdgeCases:
     """Test edge cases and error conditions for reconnect functionality."""
     
     def test_reconnect_multiple_consecutive_calls(self):
         """Test multiple consecutive reconnect calls."""
-        messenger = MQMessenger(host="localhost", port=5672, queue_name="test")
+        messenger = MQSubscriber(host="localhost", port=5672, queue_name="test")
         
         with patch.object(messenger, '_cleanup_connection') as mock_cleanup, \
              patch.object(messenger, '_create_connection') as mock_create, \
@@ -241,7 +241,7 @@ class TestMQMessengerReconnectEdgeCases:
     
     def test_reconnect_with_none_connection_and_channel(self):
         """Test reconnect when connection and channel are None."""
-        messenger = MQMessenger(host="localhost", port=5672, queue_name="test")
+        messenger = MQSubscriber(host="localhost", port=5672, queue_name="test")
         
         # Ensure connection and channel are None
         messenger._connection = None
@@ -264,7 +264,7 @@ class TestMQMessengerReconnectEdgeCases:
     
     def test_reconnect_partial_failure_scenarios(self):
         """Test various partial failure scenarios during reconnection."""
-        messenger = MQMessenger(host="localhost", port=5672, queue_name="test")
+        messenger = MQSubscriber(host="localhost", port=5672, queue_name="test")
         
         # Test scenario: cleanup succeeds, create fails
         with patch.object(messenger, '_cleanup_connection') as mock_cleanup, \
