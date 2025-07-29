@@ -3,18 +3,19 @@
 from typing import Dict, Any
 from ..config.logging_config import get_logger
 from ..core.transformation import map_tweet_data
+from ..models.schemas import TweetOutput
 
 logger = get_logger(__name__)
 
 
-def handle_tweet_event(tweet_data: Dict[str, Any]) -> Dict[str, Any]:
+def handle_tweet_event(tweet_data: Dict[str, Any]) -> TweetOutput:
     """Process tweet data and return transformed result.
     
     Args:
         tweet_data: Raw tweet data to process
         
     Returns:
-        Transformed tweet data
+        TweetOutput object with transformed tweet data
     """
     try:
         # Transform the tweet data

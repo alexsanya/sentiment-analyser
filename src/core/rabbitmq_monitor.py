@@ -3,8 +3,11 @@
 import os
 import threading
 import time
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 from ..config.logging_config import get_logger
+
+if TYPE_CHECKING:
+    from .mq_subscriber import MQSubscriber
 
 logger = get_logger(__name__)
 
@@ -187,6 +190,9 @@ class RabbitMQConnectionMonitor:
                     
                     # Flush buffered messages after successful reconnection
                     self._flush_message_buffer()
+                    
+                    # Verify consumer is running if it should be
+                    self._verify_consumer_status()
                     return
             else:
                 # Fallback to close and connect
@@ -202,6 +208,9 @@ class RabbitMQConnectionMonitor:
                     
                     # Flush buffered messages after successful reconnection
                     self._flush_message_buffer()
+                    
+                    # Verify consumer is running if it should be
+                    self._verify_consumer_status()
                     return
                     
         except Exception as e:
@@ -234,6 +243,54 @@ class RabbitMQConnectionMonitor:
         except Exception as e:
             logger.error(
                 "Error flushing message buffer after connection restore",
+                error=str(e),
+                error_type=type(e).__name__
+            )
+    
+    def _verify_consumer_status(self) -> None:
+        """Verify consumer is running after successful reconnection and restart if needed."""
+        try:
+            # Check if subscriber has message handler and consumer functionality
+            if not hasattr(self.mq_subscriber, '_message_handler') or not self.mq_subscriber._message_handler:
+                logger.debug("No message handler set, consumer verification skipped")
+                return
+            
+            # Check if consumer should be running but isn't
+            if hasattr(self.mq_subscriber, 'is_consuming'):
+                is_consuming = self.mq_subscriber.is_consuming()
+                
+                if not is_consuming:
+                    logger.warning(
+                        "Consumer not running after reconnection, attempting to restart"
+                    )
+                    
+                    # Try to restart consumer
+                    if hasattr(self.mq_subscriber, 'start_consuming'):
+                        try:
+                            self.mq_subscriber.start_consuming()
+                            
+                            # Verify it started successfully
+                            if self.mq_subscriber.is_consuming():
+                                logger.info("Consumer successfully restarted by monitor")
+                            else:
+                                logger.error("Failed to restart consumer via monitor")
+                                
+                        except Exception as e:
+                            logger.error(
+                                "Error restarting consumer via monitor",
+                                error=str(e),
+                                error_type=type(e).__name__
+                            )
+                    else:
+                        logger.warning("MQSubscriber does not support start_consuming method")
+                else:
+                    logger.debug("Consumer is running correctly after reconnection")
+            else:
+                logger.warning("MQSubscriber does not support is_consuming method")
+                
+        except Exception as e:
+            logger.error(
+                "Error verifying consumer status after reconnection",
                 error=str(e),
                 error_type=type(e).__name__
             )

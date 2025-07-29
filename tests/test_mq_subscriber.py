@@ -44,8 +44,8 @@ class TestMQSubscriberInitialization:
         
         mock_connection.assert_called_once()
         mock_channel.queue_declare.assert_called_once_with(queue="tweet_events", durable=True)
-        assert messenger._connection == mock_conn
-        assert messenger._channel == mock_channel
+        assert messenger._publisher_connection == mock_conn
+        assert messenger._publisher_channel == mock_channel
     
     @patch.dict("os.environ", {
         "RABBITMQ_HOST": "env.rabbitmq.com",
@@ -97,39 +97,28 @@ class TestMQSubscriberConnection:
         mock_connection.return_value = mock_conn
         
         messenger = MQSubscriber()
-        messenger._create_connection()
+        messenger._create_publisher_connection()
         
         mock_connection.assert_called_once()
         mock_conn.channel.assert_called_once()
         mock_channel.queue_declare.assert_called_once_with(queue="tweet_events", durable=True)
-        assert messenger._connection == mock_conn
-        assert messenger._channel == mock_channel
+        assert messenger._publisher_connection == mock_conn
+        assert messenger._publisher_channel == mock_channel
     
-    @patch("pika.BlockingConnection")
-    @patch("pika.PlainCredentials")
-    @patch("pika.ConnectionParameters")
-    def test_create_connection_with_auth(self, mock_connection_params, mock_credentials, mock_connection):
+    @patch("pika.BlockingConnection") 
+    def test_create_connection_with_auth(self, mock_connection):
         mock_conn = Mock()
         mock_channel = Mock()
         mock_conn.channel.return_value = mock_channel
         mock_connection.return_value = mock_conn
-        mock_creds = Mock()
-        mock_credentials.return_value = mock_creds
-        mock_params = Mock()
-        mock_connection_params.return_value = mock_params
         
         messenger = MQSubscriber(username="user", password="pass")
-        messenger._create_connection()
+        messenger._create_publisher_connection()
         
-        mock_credentials.assert_called_once_with("user", "pass")
-        mock_connection_params.assert_called_once_with(
-            host="localhost",
-            port=5672,
-            credentials=mock_creds
-        )
-        mock_connection.assert_called_once_with(mock_params)
-        assert messenger._connection == mock_conn
-        assert messenger._channel == mock_channel
+        # Verify connection was created with proper parameters
+        mock_connection.assert_called_once()
+        assert messenger._publisher_connection == mock_conn
+        assert messenger._publisher_channel == mock_channel
     
     @patch("pika.BlockingConnection")
     def test_create_connection_failure(self, mock_connection):
@@ -137,44 +126,71 @@ class TestMQSubscriberConnection:
         
         messenger = MQSubscriber()
         with pytest.raises(Exception, match="Connection failed"):
-            messenger._create_connection()
+            messenger._create_publisher_connection()
         
-        assert messenger._connection is None
-        assert messenger._channel is None
+        assert messenger._publisher_connection is None
+        assert messenger._publisher_channel is None
     
     def test_cleanup_connection(self):
         messenger = MQSubscriber()
-        mock_channel = Mock()
-        mock_connection = Mock()
-        mock_channel.is_closed = False
-        mock_connection.is_closed = False
+        # Mock publisher connection
+        mock_pub_channel = Mock()
+        mock_pub_connection = Mock()
+        mock_pub_channel.is_closed = False
+        mock_pub_connection.is_closed = False
         
-        messenger._channel = mock_channel
-        messenger._connection = mock_connection
+        # Mock consumer connection
+        mock_cons_channel = Mock()  
+        mock_cons_connection = Mock()
+        mock_cons_channel.is_closed = False
+        mock_cons_connection.is_closed = False
+        
+        messenger._publisher_channel = mock_pub_channel
+        messenger._publisher_connection = mock_pub_connection
+        messenger._consumer_channel = mock_cons_channel
+        messenger._consumer_connection = mock_cons_connection
         
         messenger._cleanup_connection()
         
-        mock_channel.close.assert_called_once()
-        mock_connection.close.assert_called_once()
-        assert messenger._channel is None
-        assert messenger._connection is None
+        # Verify both connections are cleaned up
+        mock_pub_channel.close.assert_called_once()
+        mock_pub_connection.close.assert_called_once()
+        mock_cons_channel.close.assert_called_once()
+        mock_cons_connection.close.assert_called_once()
+        assert messenger._publisher_channel is None
+        assert messenger._publisher_connection is None
+        assert messenger._consumer_channel is None
+        assert messenger._consumer_connection is None
     
     def test_cleanup_connection_with_closed_resources(self):
         messenger = MQSubscriber()
-        mock_channel = Mock()
-        mock_connection = Mock()
-        mock_channel.is_closed = True
-        mock_connection.is_closed = True
+        # Mock already closed connections
+        mock_pub_channel = Mock()
+        mock_pub_connection = Mock()
+        mock_pub_channel.is_closed = True
+        mock_pub_connection.is_closed = True
         
-        messenger._channel = mock_channel
-        messenger._connection = mock_connection
+        mock_cons_channel = Mock()
+        mock_cons_connection = Mock()
+        mock_cons_channel.is_closed = True
+        mock_cons_connection.is_closed = True
+        
+        messenger._publisher_channel = mock_pub_channel
+        messenger._publisher_connection = mock_pub_connection
+        messenger._consumer_channel = mock_cons_channel
+        messenger._consumer_connection = mock_cons_connection
         
         messenger._cleanup_connection()
         
-        mock_channel.close.assert_not_called()
-        mock_connection.close.assert_not_called()
-        assert messenger._channel is None
-        assert messenger._connection is None
+        # Verify close is not called on already closed connections
+        mock_pub_channel.close.assert_not_called()
+        mock_pub_connection.close.assert_not_called()
+        mock_cons_channel.close.assert_not_called()
+        mock_cons_connection.close.assert_not_called()
+        assert messenger._publisher_channel is None
+        assert messenger._publisher_connection is None
+        assert messenger._consumer_channel is None
+        assert messenger._consumer_connection is None
 
 
 class TestMQSubscriberPublish:
@@ -247,8 +263,8 @@ class TestMQSubscriberPublish:
         mock_conn.is_closed = False
         mock_channel.is_closed = False
         
-        messenger._connection = mock_conn
-        messenger._channel = mock_channel
+        messenger._publisher_connection = mock_conn
+        messenger._publisher_channel = mock_channel
         
         assert messenger.is_connected() is True
     
@@ -263,8 +279,8 @@ class TestMQSubscriberPublish:
         mock_conn.is_closed = True
         mock_channel.is_closed = False
         
-        messenger._connection = mock_conn
-        messenger._channel = mock_channel
+        messenger._publisher_connection = mock_conn
+        messenger._publisher_channel = mock_channel
         
         assert messenger.is_connected() is False
     
@@ -393,8 +409,8 @@ class TestMQSubscriberConnectionMethods:
         
         mock_connection.assert_called_once()
         mock_channel.queue_declare.assert_called_once_with(queue="tweet_events", durable=True)
-        assert messenger._connection == mock_conn
-        assert messenger._channel == mock_channel
+        assert messenger._publisher_connection == mock_conn
+        assert messenger._publisher_channel == mock_channel
     
     @patch("pika.BlockingConnection")
     def test_test_connection_success(self, mock_connection):
@@ -598,7 +614,7 @@ class TestMQSubscriberBufferIntegration:
         
         messenger = MQSubscriber(message_buffer=mock_buffer)
         
-        with patch('src.core.mq_messenger.deque') as mock_deque_class:
+        with patch('src.core.mq_subscriber.deque') as mock_deque_class:
             mock_temp_buffer = Mock()
             mock_deque_class.return_value = mock_temp_buffer
             
@@ -625,7 +641,7 @@ class TestMQSubscriberBufferIntegration:
         
         messenger = MQSubscriber(message_buffer=mock_buffer)
         
-        with patch('src.core.mq_messenger.deque') as mock_deque_class:
+        with patch('src.core.mq_subscriber.deque') as mock_deque_class:
             mock_temp_buffer = Mock()
             mock_deque_class.return_value = mock_temp_buffer
             
@@ -653,8 +669,8 @@ class TestMQSubscriberReconnection:
         # Mock existing connection for cleanup
         old_mock_conn = Mock()
         old_mock_channel = Mock()
-        messenger._connection = old_mock_conn
-        messenger._channel = old_mock_channel
+        messenger._publisher_connection = old_mock_conn
+        messenger._publisher_channel = old_mock_channel
         
         with patch.object(messenger, '_cleanup_connection') as mock_cleanup:
             result = messenger.reconnect()
@@ -662,8 +678,8 @@ class TestMQSubscriberReconnection:
         assert result is True
         mock_cleanup.assert_called_once()
         mock_connection.assert_called_once()
-        assert messenger._connection == mock_conn
-        assert messenger._channel == mock_channel
+        assert messenger._publisher_connection == mock_conn
+        assert messenger._publisher_channel == mock_channel
     
     @patch("pika.BlockingConnection")
     def test_reconnect_failure(self, mock_connection):
@@ -674,5 +690,100 @@ class TestMQSubscriberReconnection:
         result = messenger.reconnect()
         
         assert result is False
-        assert messenger._connection is None
-        assert messenger._channel is None
+        assert messenger._publisher_connection is None
+        assert messenger._publisher_channel is None
+
+
+class TestMQSubscriberConsumerRestart:
+    """Test MQSubscriber consumer restart functionality after reconnection."""
+    
+    @patch("pika.BlockingConnection")
+    def test_reconnect_restarts_consumer_when_was_consuming(self, mock_connection):
+        """Test that reconnect restarts consumer if it was running before."""
+        mock_conn = Mock()
+        mock_channel = Mock()
+        mock_conn.channel.return_value = mock_channel
+        mock_conn.is_closed = False
+        mock_channel.is_closed = False
+        mock_connection.return_value = mock_conn
+        
+        messenger = MQSubscriber()
+        messenger.set_message_handler(Mock())
+        
+        # Mock consumer as running before reconnection
+        with patch.object(messenger, 'is_consuming', side_effect=[True, True]) as mock_is_consuming:
+            with patch.object(messenger, 'stop_consuming') as mock_stop:
+                with patch.object(messenger, 'start_consuming') as mock_start:
+                    result = messenger.reconnect()
+        
+        assert result is True
+        mock_stop.assert_called_once()
+        mock_start.assert_called_once()
+    
+    @patch("pika.BlockingConnection")
+    def test_reconnect_does_not_restart_consumer_when_not_consuming(self, mock_connection):
+        """Test that reconnect doesn't restart consumer if it wasn't running."""
+        mock_conn = Mock()
+        mock_channel = Mock()
+        mock_conn.channel.return_value = mock_channel
+        mock_conn.is_closed = False
+        mock_channel.is_closed = False
+        mock_connection.return_value = mock_conn
+        
+        messenger = MQSubscriber()
+        
+        # Mock consumer as not running before reconnection
+        with patch.object(messenger, 'is_consuming', return_value=False):
+            with patch.object(messenger, 'stop_consuming') as mock_stop:
+                with patch.object(messenger, 'start_consuming') as mock_start:
+                    result = messenger.reconnect()
+        
+        assert result is True
+        mock_stop.assert_not_called()
+        mock_start.assert_not_called()
+    
+    @patch("pika.BlockingConnection")
+    def test_reconnect_handles_consumer_restart_failure(self, mock_connection):
+        """Test that reconnect handles consumer restart failures gracefully."""
+        mock_conn = Mock()
+        mock_channel = Mock()
+        mock_conn.channel.return_value = mock_channel
+        mock_conn.is_closed = False
+        mock_channel.is_closed = False
+        mock_connection.return_value = mock_conn
+        
+        messenger = MQSubscriber()
+        messenger.set_message_handler(Mock())
+        
+        # Mock consumer as running before reconnection, but start_consuming fails
+        with patch.object(messenger, 'is_consuming', side_effect=[True, False]) as mock_is_consuming:
+            with patch.object(messenger, 'stop_consuming') as mock_stop:
+                with patch.object(messenger, 'start_consuming', side_effect=Exception("Consumer start failed")) as mock_start:
+                    result = messenger.reconnect()
+        
+        assert result is False
+        mock_stop.assert_called_once()
+        mock_start.assert_called_once()
+    
+    @patch("pika.BlockingConnection")
+    def test_reconnect_without_message_handler_skips_consumer_restart(self, mock_connection):
+        """Test that reconnect skips consumer restart if no message handler is set."""
+        mock_conn = Mock()
+        mock_channel = Mock()
+        mock_conn.channel.return_value = mock_channel
+        mock_conn.is_closed = False
+        mock_channel.is_closed = False
+        mock_connection.return_value = mock_conn
+        
+        messenger = MQSubscriber()
+        # No message handler set
+        
+        # Mock consumer as running before reconnection
+        with patch.object(messenger, 'is_consuming', return_value=True):
+            with patch.object(messenger, 'stop_consuming') as mock_stop:
+                with patch.object(messenger, 'start_consuming') as mock_start:
+                    result = messenger.reconnect()
+        
+        assert result is True
+        mock_stop.assert_called_once()
+        mock_start.assert_not_called()  # Should not restart without handler

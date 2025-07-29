@@ -6,7 +6,7 @@ Provides structured logging with file separation by log level.
 import logging
 import logging.handlers
 import os
-from typing import Any, Dict
+from typing import Any, Dict, Optional, List, Union, cast
 
 import structlog
 
@@ -19,7 +19,7 @@ class StructlogFormatter(structlog.stdlib.ProcessorFormatter):
     """
     Custom formatter that uses structlog's JSONRenderer for file output.
     """
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(
             processor=structlog.processors.JSONRenderer(),
         )
@@ -29,13 +29,13 @@ class StructlogConsoleFormatter(structlog.stdlib.ProcessorFormatter):
     """
     Custom formatter that uses structlog's ConsoleRenderer for console output.
     """
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(
             processor=structlog.dev.ConsoleRenderer(),
         )
 
 
-def setup_logging(environment: str = None) -> structlog.stdlib.BoundLogger:
+def setup_logging(environment: Optional[str] = None) -> structlog.stdlib.BoundLogger:
     """
     Configure structured logging with file separation by log level.
     
@@ -91,7 +91,7 @@ def setup_logging(environment: str = None) -> structlog.stdlib.BoundLogger:
     info_handler.setLevel(logging.INFO)
     info_handler.setFormatter(json_formatter)
 
-    handlers = [
+    handlers: List[Union[logging.handlers.RotatingFileHandler, logging.StreamHandler]] = [
         error_handler,
         warning_handler,
         info_handler
@@ -111,7 +111,7 @@ def setup_logging(environment: str = None) -> structlog.stdlib.BoundLogger:
         root_logger.addHandler(handler)
     
     # Configure structlog processors 
-    processors = [
+    processors: List[Any] = [
         structlog.stdlib.filter_by_level,
         structlog.stdlib.add_logger_name,
         structlog.stdlib.add_log_level,
@@ -132,10 +132,10 @@ def setup_logging(environment: str = None) -> structlog.stdlib.BoundLogger:
         cache_logger_on_first_use=True,
     )
     
-    return structlog.get_logger()
+    return cast(structlog.stdlib.BoundLogger, structlog.get_logger())
 
 
-def get_logger(name: str = None) -> structlog.stdlib.BoundLogger:
+def get_logger(name: Optional[str] = None) -> structlog.stdlib.BoundLogger:
     """
     Get a configured logger instance.
     
@@ -145,4 +145,4 @@ def get_logger(name: str = None) -> structlog.stdlib.BoundLogger:
     Returns:
         Configured structlog logger
     """
-    return structlog.get_logger(name)
+    return cast(structlog.stdlib.BoundLogger, structlog.get_logger(name))

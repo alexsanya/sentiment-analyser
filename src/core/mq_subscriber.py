@@ -5,10 +5,11 @@ import os
 import time
 import threading
 from collections import deque
-from typing import Dict, Any, Optional, List, Union, Callable
+from typing import Dict, Any, Optional, List, Union, Callable, Type
 import pika
 from pika.adapters.blocking_connection import BlockingChannel
 from pika.connection import Connection
+from pika.spec import Basic, BasicProperties
 from pydantic import ValidationError
 from ..config.logging_config import get_logger
 from .message_buffer import MessageBuffer
@@ -49,8 +50,13 @@ class MQSubscriber:
         self.consume_queue = consume_queue or queue_name
         self.username = username
         self.password = password
-        self._connection: Optional[Connection] = None
-        self._channel: Optional[BlockingChannel] = None
+        # Consumer connection (dedicated for consuming only)
+        self._consumer_connection: Optional[Connection] = None
+        self._consumer_channel: Optional[BlockingChannel] = None
+        
+        # Publisher connection (for publishing and monitoring)
+        self._publisher_connection: Optional[Connection] = None
+        self._publisher_channel: Optional[BlockingChannel] = None
         self.message_buffer = message_buffer if message_buffer is not None else MessageBuffer.from_env()
         
         # Consumer-related attributes
@@ -86,101 +92,174 @@ class MQSubscriber:
             consume_queue=os.getenv("RABBITMQ_CONSUME_QUEUE")
         )
     
-    def _create_connection(self) -> None:
-        """Create connection to RabbitMQ server."""
+    def _create_connection_parameters(self) -> pika.ConnectionParameters:
+        """Create connection parameters for RabbitMQ with optimized settings."""
+        if self.username and self.password:
+            credentials = pika.PlainCredentials(self.username, self.password)
+            return pika.ConnectionParameters(
+                host=self.host,
+                port=self.port,
+                credentials=credentials,
+                heartbeat=300,  # 5 minutes heartbeat to prevent connection drops
+                blocked_connection_timeout=300,  # 5 minutes blocked connection timeout
+                connection_attempts=3,
+                retry_delay=5.0,
+                socket_timeout=10.0,
+                tcp_options={"TCP_KEEPINTVL": 20, "TCP_KEEPCNT": 6}
+            )
+        else:
+            return pika.ConnectionParameters(
+                host=self.host, 
+                port=self.port,
+                heartbeat=300,  # 5 minutes heartbeat to prevent connection drops
+                blocked_connection_timeout=300,  # 5 minutes blocked connection timeout
+                connection_attempts=3,
+                retry_delay=5.0,
+                socket_timeout=10.0,
+                tcp_options={"TCP_KEEPINTVL": 20, "TCP_KEEPCNT": 6}
+            )
+    
+    def _create_consumer_connection(self) -> None:
+        """Create dedicated connection for consuming messages."""
         try:
-            if self.username and self.password:
-                credentials = pika.PlainCredentials(self.username, self.password)
-                parameters = pika.ConnectionParameters(
-                    host=self.host,
-                    port=self.port,
-                    credentials=credentials
-                )
-            else:
-                parameters = pika.ConnectionParameters(host=self.host, port=self.port)
+            parameters = self._create_connection_parameters()
+            self._consumer_connection = pika.BlockingConnection(parameters)
+            self._consumer_channel = self._consumer_connection.channel()
             
-            self._connection = pika.BlockingConnection(parameters)
-            self._channel = self._connection.channel()
+            # Declare consume queue as durable for persistence
+            self._consumer_channel.queue_declare(queue=self.consume_queue, durable=True)
             
-            # Declare queue as durable for persistence
-            self._channel.queue_declare(queue=self.queue_name, durable=True)
-            
-            logger.info("RabbitMQ connection established", queue_name=self.queue_name)
+            logger.info("RabbitMQ consumer connection established", consume_queue=self.consume_queue)
             
         except Exception as e:
             logger.error(
-                "Failed to create RabbitMQ connection",
+                "Failed to create RabbitMQ consumer connection",
                 error=str(e),
                 host=self.host,
                 port=self.port
             )
-            self._cleanup_connection()
+            self._cleanup_consumer_connection()
             raise
     
+    def _create_publisher_connection(self) -> None:
+        """Create dedicated connection for publishing messages."""
+        try:
+            parameters = self._create_connection_parameters()
+            self._publisher_connection = pika.BlockingConnection(parameters)
+            self._publisher_channel = self._publisher_connection.channel()
+            
+            # Declare publish queue as durable for persistence
+            self._publisher_channel.queue_declare(queue=self.queue_name, durable=True)
+            
+            logger.info("RabbitMQ publisher connection established", queue_name=self.queue_name)
+            
+        except Exception as e:
+            logger.error(
+                "Failed to create RabbitMQ publisher connection",
+                error=str(e),
+                host=self.host,
+                port=self.port
+            )
+            self._cleanup_publisher_connection()
+            raise
+    
+    def _cleanup_consumer_connection(self) -> None:
+        """Clean up consumer connection and channel resources."""
+        if self._consumer_channel and not self._consumer_channel.is_closed:
+            try:
+                self._consumer_channel.close()
+            except Exception as e:
+                logger.warning("Error closing consumer channel", error=str(e))
+        
+        if self._consumer_connection and not self._consumer_connection.is_closed:
+            try:
+                self._consumer_connection.close()
+            except Exception as e:
+                logger.warning("Error closing consumer connection", error=str(e))
+        
+        self._consumer_channel = None
+        self._consumer_connection = None
+    
+    def _cleanup_publisher_connection(self) -> None:
+        """Clean up publisher connection and channel resources."""
+        if self._publisher_channel and not self._publisher_channel.is_closed:
+            try:
+                self._publisher_channel.close()
+            except Exception as e:
+                logger.warning("Error closing publisher channel", error=str(e))
+        
+        if self._publisher_connection and not self._publisher_connection.is_closed:
+            try:
+                self._publisher_connection.close()
+            except Exception as e:
+                logger.warning("Error closing publisher connection", error=str(e))
+        
+        self._publisher_channel = None
+        self._publisher_connection = None
+    
     def _cleanup_connection(self) -> None:
-        """Clean up connection and channel resources."""
-        if self._channel and not self._channel.is_closed:
-            try:
-                self._channel.close()
-            except Exception as e:
-                logger.warning("Error closing channel", error=str(e))
-        
-        if self._connection and not self._connection.is_closed:
-            try:
-                self._connection.close()
-            except Exception as e:
-                logger.warning("Error closing connection", error=str(e))
-        
-        self._channel = None
-        self._connection = None
+        """Clean up all connection and channel resources."""
+        self._cleanup_consumer_connection()
+        self._cleanup_publisher_connection()
     
     def connect(self) -> None:
-        """Establish connection to RabbitMQ server.
+        """Establish connections to RabbitMQ server.
         
         Raises:
-            Exception: If connection cannot be established
+            Exception: If connections cannot be established
         """
-        if not self.is_connected():
-            self._create_connection()
-            logger.info("RabbitMQ connection established at startup")
+        if not self.is_publisher_connected():
+            self._create_publisher_connection()
+            logger.info("RabbitMQ publisher connection established at startup")
     
     def test_connection(self) -> bool:
-        """Test RabbitMQ connection and return success status.
+        """Test RabbitMQ publisher connection and return success status.
         
         Returns:
             bool: True if connection is successful, False otherwise
         """
         try:
-            if not self.is_connected():
-                self._create_connection()
+            if not self.is_publisher_connected():
+                self._create_publisher_connection()
             
             # Declare connection_events queue for test messages
             connection_events_queue = "connection_events"
-            self._channel.queue_declare(queue=connection_events_queue, durable=True)
+            if self._publisher_channel is None:
+                raise RuntimeError("Publisher channel is not available")
+            
+            self._publisher_channel.queue_declare(queue=connection_events_queue, durable=True)
             
             # Test publish a small message to validate connection
             test_message = {"_test": "connection_validation"}
-            self._channel.basic_publish(
+            self._publisher_channel.basic_publish(
                 exchange='',
                 routing_key=connection_events_queue,
                 body=json.dumps(test_message),
                 properties=pika.BasicProperties(delivery_mode=2)
             )
             
-            logger.info("RabbitMQ connection test successful")
+            logger.info("RabbitMQ publisher connection test successful")
             return True
             
         except Exception as e:
-            logger.error("RabbitMQ connection test failed", error=str(e))
+            logger.error("RabbitMQ publisher connection test failed", error=str(e))
             return False
     
-    def _ensure_connection(self) -> None:
-        """Ensure connection is active, create if needed."""
-        if not self._connection or self._connection.is_closed:
-            self._create_connection()
-        elif not self._channel or self._channel.is_closed:
-            self._channel = self._connection.channel()
-            self._channel.queue_declare(queue=self.queue_name, durable=True)
+    def _ensure_publisher_connection(self) -> None:
+        """Ensure publisher connection is active, create if needed."""
+        if not self._publisher_connection or self._publisher_connection.is_closed:
+            self._create_publisher_connection()
+        elif not self._publisher_channel or self._publisher_channel.is_closed:
+            self._publisher_channel = self._publisher_connection.channel()
+            self._publisher_channel.queue_declare(queue=self.queue_name, durable=True)
+    
+    def _ensure_consumer_connection(self) -> None:
+        """Ensure consumer connection is active, create if needed."""
+        if not self._consumer_connection or self._consumer_connection.is_closed:
+            self._create_consumer_connection()
+        elif not self._consumer_channel or self._consumer_channel.is_closed:
+            self._consumer_channel = self._consumer_connection.channel()
+            self._consumer_channel.queue_declare(queue=self.consume_queue, durable=True)
     
     def publish(self, message: Union[Dict[str, Any], TweetOutput]) -> bool:
         """Publish JSON message to RabbitMQ queue with automatic buffering on failure.
@@ -230,10 +309,13 @@ class MQSubscriber:
             raise ValueError(f"Message too large: {message_size} bytes exceeds {max_message_size} bytes")
         
         try:
-            self._ensure_connection()
+            self._ensure_publisher_connection()
+            
+            if self._publisher_channel is None:
+                raise RuntimeError("Publisher channel is not available after connection check")
             
             # Publish message with persistence
-            self._channel.basic_publish(
+            self._publisher_channel.basic_publish(
                 exchange='',
                 routing_key=self.queue_name,
                 body=json_message,
@@ -250,12 +332,24 @@ class MQSubscriber:
             return True
             
         except Exception as e:
-            logger.error(
-                "Failed to publish message to RabbitMQ, attempting to buffer",
-                error=str(e),
-                queue_name=self.queue_name,
-                message_size=len(str(message))
-            )
+            # Check for specific Pika buffer underflow error
+            if "tx buffer size underflow" in str(e) or "AssertionError" in str(e):
+                logger.error(
+                    "Pika buffer underflow detected - this indicates a thread safety issue",
+                    error=str(e),
+                    queue_name=self.queue_name,
+                    message_size=len(str(message)),
+                    error_type="pika_buffer_underflow"
+                )
+                # Force reconnection on buffer underflow
+                self._cleanup_publisher_connection()
+            else:
+                logger.error(
+                    "Failed to publish message to RabbitMQ, attempting to buffer",
+                    error=str(e),
+                    queue_name=self.queue_name,
+                    message_size=len(str(message))
+                )
             
             # Try to buffer the message
             if self.message_buffer.add_message(message):
@@ -272,41 +366,88 @@ class MQSubscriber:
             
             return False
     
-    def is_connected(self) -> bool:
-        """Check if connection is active.
+    def is_publisher_connected(self) -> bool:
+        """Check if publisher connection is active.
         
         Returns:
-            bool: True if connection and channel are open, False otherwise
+            bool: True if publisher connection and channel are open, False otherwise
         """
         return (
-            self._connection is not None and 
-            not self._connection.is_closed and
-            self._channel is not None and
-            not self._channel.is_closed
+            self._publisher_connection is not None and 
+            not self._publisher_connection.is_closed and
+            self._publisher_channel is not None and
+            not self._publisher_channel.is_closed
         )
     
+    def is_consumer_connected(self) -> bool:
+        """Check if consumer connection is active.
+        
+        Returns:
+            bool: True if consumer connection and channel are open, False otherwise
+        """
+        return (
+            self._consumer_connection is not None and 
+            not self._consumer_connection.is_closed and
+            self._consumer_channel is not None and
+            not self._consumer_channel.is_closed
+        )
+    
+    def is_connected(self) -> bool:
+        """Check if any connection is active (backwards compatibility).
+        
+        Returns:
+            bool: True if publisher connection is active, False otherwise
+        """
+        return self.is_publisher_connected()
+    
     def reconnect(self) -> bool:
-        """Reconnect to RabbitMQ server by closing and re-establishing connection.
+        """Reconnect to RabbitMQ server by closing and re-establishing connections.
         
         Returns:
             bool: True if reconnection was successful, False otherwise
         """
         logger.info("Attempting to reconnect to RabbitMQ")
         
+        # Remember if consumer was running before reconnection
+        was_consuming = self.is_consuming()
+        
         try:
-            # Clean up existing connection
+            # Stop consuming first to clean up consumer thread
+            if was_consuming:
+                logger.info("Stopping consumer before reconnection")
+                self.stop_consuming()
+            
+            # Clean up existing connections
             self._cleanup_connection()
             
-            # Establish new connection
-            self._create_connection()
+            # Establish new publisher connection
+            self._create_publisher_connection()
             
             # Verify the new connection works
-            if self.is_connected():
-                logger.info("RabbitMQ reconnection successful")
-                return True
-            else:
-                logger.error("RabbitMQ reconnection failed - connection not established")
+            if not self.is_publisher_connected():
+                logger.error("RabbitMQ reconnection failed - publisher connection not established")
                 return False
+            
+            # Restart consumer if it was running before
+            if was_consuming and self._message_handler:
+                logger.info("Restarting consumer after successful reconnection")
+                try:
+                    self.start_consuming()
+                    if self.is_consuming():
+                        logger.info("Consumer successfully restarted after reconnection")
+                    else:
+                        logger.error("Failed to restart consumer after reconnection")
+                        return False
+                except Exception as e:
+                    logger.error(
+                        "Failed to restart consumer after reconnection",
+                        error=str(e),
+                        error_type=type(e).__name__
+                    )
+                    return False
+            
+            logger.info("RabbitMQ reconnection successful")
+            return True
                 
         except Exception as e:
             logger.error(
@@ -361,10 +502,13 @@ class MQSubscriber:
                     continue
                 
                 # Try to publish the validated message directly (bypassing buffer logic)
-                self._ensure_connection()
+                self._ensure_publisher_connection()
+                
+                if self._publisher_channel is None:
+                    raise RuntimeError("Publisher channel is not available after connection check")
                 
                 json_message = json.dumps(validated_dict, default=str)
-                self._channel.basic_publish(
+                self._publisher_channel.basic_publish(
                     exchange='',
                     routing_key=self.queue_name,
                     body=json_message,
@@ -427,14 +571,17 @@ class MQSubscriber:
         try:
             logger.info("Starting message consumption", consume_queue=self.consume_queue)
             
-            # Ensure connection is established
-            self._ensure_connection()
+            # Ensure consumer connection is established
+            self._ensure_consumer_connection()
+            
+            if self._consumer_channel is None:
+                raise RuntimeError("Consumer channel is not available after connection check")
             
             # Declare the consume queue
-            self._channel.queue_declare(queue=self.consume_queue, durable=True)
+            self._consumer_channel.queue_declare(queue=self.consume_queue, durable=True)
             
             # Set up consumer
-            def wrapper_callback(channel, method, properties, body):
+            def wrapper_callback(channel: BlockingChannel, method: Basic.Deliver, properties: BasicProperties, body: bytes) -> None:
                 if not self._stop_consuming.is_set() and self._message_handler:
                     try:
                         self._message_handler(channel, method, properties, body)
@@ -448,7 +595,7 @@ class MQSubscriber:
                         channel.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
             
             # Start consuming
-            self._consumer_tag = self._channel.basic_consume(
+            self._consumer_tag = self._consumer_channel.basic_consume(
                 queue=self.consume_queue,
                 on_message_callback=wrapper_callback
             )
@@ -456,12 +603,72 @@ class MQSubscriber:
             logger.info("Message consumer started", consumer_tag=self._consumer_tag)
             
             # Keep consuming until stop signal
+            consecutive_errors = 0
+            max_consecutive_errors = 3
+            error_backoff_delay = 1  # seconds
+            
             while not self._stop_consuming.is_set():
                 try:
-                    self._connection.process_data_events(time_limit=1)
+                    if self._consumer_connection is None:
+                        logger.error("Consumer connection lost during processing")
+                        break
+                    self._consumer_connection.process_data_events(time_limit=1)
+                    # Reset error counter on successful processing
+                    consecutive_errors = 0
+                    
                 except Exception as e:
-                    if not self._stop_consuming.is_set():
-                        logger.error("Error processing data events", error=str(e))
+                    if self._stop_consuming.is_set():
+                        break
+                    
+                    consecutive_errors += 1
+                    
+                    # Check for specific Pika buffer underflow error
+                    if "tx buffer size underflow" in str(e) or "AssertionError" in str(e):
+                        logger.error(
+                            "Pika buffer underflow detected in consumer - this indicates a thread safety issue",
+                            error=str(e),
+                            error_type="pika_buffer_underflow",
+                            consecutive_errors=consecutive_errors
+                        )
+                        # Force reconnection on buffer underflow
+                        self._cleanup_consumer_connection()
+                        break
+                    
+                    # Handle recoverable connection errors with retry logic
+                    elif consecutive_errors <= max_consecutive_errors:
+                        logger.warning(
+                            "Recoverable error in consumer, attempting retry",
+                            error=str(e),
+                            consecutive_errors=consecutive_errors,
+                            max_consecutive_errors=max_consecutive_errors
+                        )
+                        
+                        # Wait before retry (with backoff)
+                        retry_delay = error_backoff_delay * consecutive_errors
+                        if not self._stop_consuming.wait(timeout=retry_delay):
+                            # Try to re-establish consumer connection
+                            try:
+                                self._cleanup_consumer_connection()
+                                self._ensure_consumer_connection()
+                                logger.info("Consumer connection re-established after error")
+                                continue
+                            except Exception as reconnect_error:
+                                logger.error(
+                                    "Failed to re-establish consumer connection",
+                                    error=str(reconnect_error),
+                                    consecutive_errors=consecutive_errors
+                                )
+                        else:
+                            # Stop signal was set during wait
+                            break
+                    else:
+                        # Too many consecutive errors, give up
+                        logger.error(
+                            "Too many consecutive errors in consumer, stopping consumption",
+                            error=str(e),
+                            consecutive_errors=consecutive_errors,
+                            max_consecutive_errors=max_consecutive_errors
+                        )
                         break
             
             logger.info("Message consumption stopped")
@@ -470,9 +677,9 @@ class MQSubscriber:
             logger.error("Error in message consumption thread", error=str(e))
         finally:
             # Clean up consumer
-            if self._consumer_tag and self._channel and not self._channel.is_closed:
+            if self._consumer_tag and self._consumer_channel and not self._consumer_channel.is_closed:
                 try:
-                    self._channel.basic_cancel(self._consumer_tag)
+                    self._consumer_channel.basic_cancel(self._consumer_tag)
                     logger.info("Consumer cancelled", consumer_tag=self._consumer_tag)
                 except Exception as e:
                     logger.warning("Error cancelling consumer", error=str(e))
@@ -541,6 +748,6 @@ class MQSubscriber:
         """Context manager entry."""
         return self
     
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+    def __exit__(self, exc_type: Optional[Type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[Any]) -> None:
         """Context manager exit."""
         self.close()
