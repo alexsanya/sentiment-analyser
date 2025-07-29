@@ -377,3 +377,122 @@ class TestRabbitMQMonitorEnvironmentIntegration:
         # Should be safe to call multiple times
         monitor.stop()
         assert not monitor._is_running
+
+
+class TestRabbitMQMonitorConsumerVerification:
+    """Test consumer verification functionality in RabbitMQ monitor."""
+    
+    @pytest.fixture
+    def mock_mq_subscriber_with_consumer(self):
+        """Create a mock MQSubscriber with consumer functionality."""
+        mock = Mock()
+        mock.is_connected.return_value = True
+        mock.test_connection.return_value = True
+        mock.reconnect.return_value = True
+        mock._message_handler = Mock()  # Has message handler
+        mock.is_consuming.return_value = True
+        mock.start_consuming.return_value = None
+        return mock
+    
+    def test_verify_consumer_status_when_consumer_running(self, mock_mq_subscriber_with_consumer):
+        """Test consumer verification when consumer is running correctly."""
+        monitor = RabbitMQConnectionMonitor(mock_mq_subscriber_with_consumer)
+        
+        # Consumer is running, should not attempt restart
+        monitor._verify_consumer_status()
+        
+        mock_mq_subscriber_with_consumer.is_consuming.assert_called_once()
+        mock_mq_subscriber_with_consumer.start_consuming.assert_not_called()
+    
+    def test_verify_consumer_status_when_consumer_not_running(self, mock_mq_subscriber_with_consumer):
+        """Test consumer verification when consumer is not running and needs restart."""
+        monitor = RabbitMQConnectionMonitor(mock_mq_subscriber_with_consumer)
+        
+        # Mock consumer as not running
+        mock_mq_subscriber_with_consumer.is_consuming.return_value = False
+        
+        # After restart, consumer should be running
+        def side_effect():
+            mock_mq_subscriber_with_consumer.is_consuming.return_value = True
+        mock_mq_subscriber_with_consumer.start_consuming.side_effect = side_effect
+        
+        monitor._verify_consumer_status()
+        
+        mock_mq_subscriber_with_consumer.is_consuming.assert_called()
+        mock_mq_subscriber_with_consumer.start_consuming.assert_called_once()
+    
+    def test_verify_consumer_status_when_restart_fails(self, mock_mq_subscriber_with_consumer):
+        """Test consumer verification when restart fails."""
+        monitor = RabbitMQConnectionMonitor(mock_mq_subscriber_with_consumer)
+        
+        # Mock consumer as not running
+        mock_mq_subscriber_with_consumer.is_consuming.return_value = False
+        mock_mq_subscriber_with_consumer.start_consuming.side_effect = Exception("Restart failed")
+        
+        # Should handle exception gracefully
+        monitor._verify_consumer_status()
+        
+        mock_mq_subscriber_with_consumer.start_consuming.assert_called_once()
+    
+    def test_verify_consumer_status_without_message_handler(self):
+        """Test consumer verification when no message handler is set."""
+        mock_subscriber = Mock()
+        mock_subscriber._message_handler = None  # No message handler
+        
+        monitor = RabbitMQConnectionMonitor(mock_subscriber)
+        
+        # Should skip verification
+        monitor._verify_consumer_status()
+        
+        # Should not call is_consuming or start_consuming
+        assert not hasattr(mock_subscriber, 'is_consuming') or not mock_subscriber.is_consuming.called
+    
+    def test_verify_consumer_status_without_consumer_methods(self):
+        """Test consumer verification when subscriber doesn't have consumer methods."""
+        mock_subscriber = Mock()
+        mock_subscriber._message_handler = Mock()  # Has message handler
+        del mock_subscriber.is_consuming  # Remove consumer methods
+        del mock_subscriber.start_consuming
+        
+        monitor = RabbitMQConnectionMonitor(mock_subscriber)
+        
+        # Should handle missing methods gracefully
+        monitor._verify_consumer_status()
+        
+        # No exceptions should be raised
+    
+    def test_attempt_reconnection_calls_verify_consumer_status(self):
+        """Test that _attempt_reconnection calls _verify_consumer_status after successful reconnection."""
+        mock_subscriber = Mock()
+        mock_subscriber.reconnect.return_value = True
+        mock_subscriber.flush_buffer.return_value = 0
+        mock_subscriber._message_handler = Mock()
+        mock_subscriber.is_consuming.return_value = True
+        
+        monitor = RabbitMQConnectionMonitor(mock_subscriber, max_retry_attempts=1)
+        monitor._consecutive_failures = 1
+        
+        with patch.object(monitor, '_verify_consumer_status') as mock_verify:
+            monitor._attempt_reconnection()
+        
+        # Should call consumer verification after successful reconnection
+        mock_verify.assert_called_once()
+    
+    def test_consumer_verification_integration_with_reconnection(self):
+        """Test full integration of consumer verification with reconnection process."""
+        mock_subscriber = Mock()
+        mock_subscriber.is_connected.return_value = False
+        mock_subscriber.test_connection.return_value = False
+        mock_subscriber.reconnect.return_value = True
+        mock_subscriber.flush_buffer.return_value = 0
+        mock_subscriber._message_handler = Mock()
+        mock_subscriber.is_consuming.side_effect = [False, True]  # First not running, then running after restart
+        
+        monitor = RabbitMQConnectionMonitor(mock_subscriber, check_interval=0.1, max_retry_attempts=1)
+        
+        # Simulate one iteration of the monitor loop
+        monitor._check_and_handle_connection()
+        
+        # Verify reconnection and consumer restart were called
+        mock_subscriber.reconnect.assert_called_once()
+        mock_subscriber.start_consuming.assert_called_once()

@@ -401,7 +401,15 @@ class MQSubscriber:
         """
         logger.info("Attempting to reconnect to RabbitMQ")
         
+        # Remember if consumer was running before reconnection
+        was_consuming = self.is_consuming()
+        
         try:
+            # Stop consuming first to clean up consumer thread
+            if was_consuming:
+                logger.info("Stopping consumer before reconnection")
+                self.stop_consuming()
+            
             # Clean up existing connections
             self._cleanup_connection()
             
@@ -409,12 +417,30 @@ class MQSubscriber:
             self._create_publisher_connection()
             
             # Verify the new connection works
-            if self.is_publisher_connected():
-                logger.info("RabbitMQ publisher reconnection successful")
-                return True
-            else:
+            if not self.is_publisher_connected():
                 logger.error("RabbitMQ reconnection failed - publisher connection not established")
                 return False
+            
+            # Restart consumer if it was running before
+            if was_consuming and self._message_handler:
+                logger.info("Restarting consumer after successful reconnection")
+                try:
+                    self.start_consuming()
+                    if self.is_consuming():
+                        logger.info("Consumer successfully restarted after reconnection")
+                    else:
+                        logger.error("Failed to restart consumer after reconnection")
+                        return False
+                except Exception as e:
+                    logger.error(
+                        "Failed to restart consumer after reconnection",
+                        error=str(e),
+                        error_type=type(e).__name__
+                    )
+                    return False
+            
+            logger.info("RabbitMQ reconnection successful")
+            return True
                 
         except Exception as e:
             logger.error(
@@ -564,24 +590,70 @@ class MQSubscriber:
             logger.info("Message consumer started", consumer_tag=self._consumer_tag)
             
             # Keep consuming until stop signal
+            consecutive_errors = 0
+            max_consecutive_errors = 3
+            error_backoff_delay = 1  # seconds
+            
             while not self._stop_consuming.is_set():
                 try:
                     self._consumer_connection.process_data_events(time_limit=1)
+                    # Reset error counter on successful processing
+                    consecutive_errors = 0
+                    
                 except Exception as e:
-                    if not self._stop_consuming.is_set():
-                        # Check for specific Pika buffer underflow error
-                        if "tx buffer size underflow" in str(e) or "AssertionError" in str(e):
-                            logger.error(
-                                "Pika buffer underflow detected in consumer - this indicates a thread safety issue",
-                                error=str(e),
-                                error_type="pika_buffer_underflow"
-                            )
-                            # Force reconnection on buffer underflow
-                            self._cleanup_consumer_connection()
-                            break
+                    if self._stop_consuming.is_set():
+                        break
+                    
+                    consecutive_errors += 1
+                    
+                    # Check for specific Pika buffer underflow error
+                    if "tx buffer size underflow" in str(e) or "AssertionError" in str(e):
+                        logger.error(
+                            "Pika buffer underflow detected in consumer - this indicates a thread safety issue",
+                            error=str(e),
+                            error_type="pika_buffer_underflow",
+                            consecutive_errors=consecutive_errors
+                        )
+                        # Force reconnection on buffer underflow
+                        self._cleanup_consumer_connection()
+                        break
+                    
+                    # Handle recoverable connection errors with retry logic
+                    elif consecutive_errors <= max_consecutive_errors:
+                        logger.warning(
+                            "Recoverable error in consumer, attempting retry",
+                            error=str(e),
+                            consecutive_errors=consecutive_errors,
+                            max_consecutive_errors=max_consecutive_errors
+                        )
+                        
+                        # Wait before retry (with backoff)
+                        retry_delay = error_backoff_delay * consecutive_errors
+                        if not self._stop_consuming.wait(timeout=retry_delay):
+                            # Try to re-establish consumer connection
+                            try:
+                                self._cleanup_consumer_connection()
+                                self._ensure_consumer_connection()
+                                logger.info("Consumer connection re-established after error")
+                                continue
+                            except Exception as reconnect_error:
+                                logger.error(
+                                    "Failed to re-establish consumer connection",
+                                    error=str(reconnect_error),
+                                    consecutive_errors=consecutive_errors
+                                )
                         else:
-                            logger.error("Error processing data events", error=str(e))
+                            # Stop signal was set during wait
                             break
+                    else:
+                        # Too many consecutive errors, give up
+                        logger.error(
+                            "Too many consecutive errors in consumer, stopping consumption",
+                            error=str(e),
+                            consecutive_errors=consecutive_errors,
+                            max_consecutive_errors=max_consecutive_errors
+                        )
+                        break
             
             logger.info("Message consumption stopped")
             

@@ -692,3 +692,98 @@ class TestMQSubscriberReconnection:
         assert result is False
         assert messenger._publisher_connection is None
         assert messenger._publisher_channel is None
+
+
+class TestMQSubscriberConsumerRestart:
+    """Test MQSubscriber consumer restart functionality after reconnection."""
+    
+    @patch("pika.BlockingConnection")
+    def test_reconnect_restarts_consumer_when_was_consuming(self, mock_connection):
+        """Test that reconnect restarts consumer if it was running before."""
+        mock_conn = Mock()
+        mock_channel = Mock()
+        mock_conn.channel.return_value = mock_channel
+        mock_conn.is_closed = False
+        mock_channel.is_closed = False
+        mock_connection.return_value = mock_conn
+        
+        messenger = MQSubscriber()
+        messenger.set_message_handler(Mock())
+        
+        # Mock consumer as running before reconnection
+        with patch.object(messenger, 'is_consuming', side_effect=[True, True]) as mock_is_consuming:
+            with patch.object(messenger, 'stop_consuming') as mock_stop:
+                with patch.object(messenger, 'start_consuming') as mock_start:
+                    result = messenger.reconnect()
+        
+        assert result is True
+        mock_stop.assert_called_once()
+        mock_start.assert_called_once()
+    
+    @patch("pika.BlockingConnection")
+    def test_reconnect_does_not_restart_consumer_when_not_consuming(self, mock_connection):
+        """Test that reconnect doesn't restart consumer if it wasn't running."""
+        mock_conn = Mock()
+        mock_channel = Mock()
+        mock_conn.channel.return_value = mock_channel
+        mock_conn.is_closed = False
+        mock_channel.is_closed = False
+        mock_connection.return_value = mock_conn
+        
+        messenger = MQSubscriber()
+        
+        # Mock consumer as not running before reconnection
+        with patch.object(messenger, 'is_consuming', return_value=False):
+            with patch.object(messenger, 'stop_consuming') as mock_stop:
+                with patch.object(messenger, 'start_consuming') as mock_start:
+                    result = messenger.reconnect()
+        
+        assert result is True
+        mock_stop.assert_not_called()
+        mock_start.assert_not_called()
+    
+    @patch("pika.BlockingConnection")
+    def test_reconnect_handles_consumer_restart_failure(self, mock_connection):
+        """Test that reconnect handles consumer restart failures gracefully."""
+        mock_conn = Mock()
+        mock_channel = Mock()
+        mock_conn.channel.return_value = mock_channel
+        mock_conn.is_closed = False
+        mock_channel.is_closed = False
+        mock_connection.return_value = mock_conn
+        
+        messenger = MQSubscriber()
+        messenger.set_message_handler(Mock())
+        
+        # Mock consumer as running before reconnection, but start_consuming fails
+        with patch.object(messenger, 'is_consuming', side_effect=[True, False]) as mock_is_consuming:
+            with patch.object(messenger, 'stop_consuming') as mock_stop:
+                with patch.object(messenger, 'start_consuming', side_effect=Exception("Consumer start failed")) as mock_start:
+                    result = messenger.reconnect()
+        
+        assert result is False
+        mock_stop.assert_called_once()
+        mock_start.assert_called_once()
+    
+    @patch("pika.BlockingConnection")
+    def test_reconnect_without_message_handler_skips_consumer_restart(self, mock_connection):
+        """Test that reconnect skips consumer restart if no message handler is set."""
+        mock_conn = Mock()
+        mock_channel = Mock()
+        mock_conn.channel.return_value = mock_channel
+        mock_conn.is_closed = False
+        mock_channel.is_closed = False
+        mock_connection.return_value = mock_conn
+        
+        messenger = MQSubscriber()
+        # No message handler set
+        
+        # Mock consumer as running before reconnection
+        with patch.object(messenger, 'is_consuming', return_value=True):
+            with patch.object(messenger, 'stop_consuming') as mock_stop:
+                with patch.object(messenger, 'start_consuming') as mock_start:
+                    result = messenger.reconnect()
+        
+        assert result is True
+        mock_stop.assert_called_once()
+        mock_start.assert_not_called()  # Should not restart without handler

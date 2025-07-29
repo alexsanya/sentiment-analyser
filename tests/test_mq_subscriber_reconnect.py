@@ -36,16 +36,16 @@ class TestMQSubscriberReconnect:
         """Test successful reconnection."""
         # Mock the internal methods
         with patch.object(messenger, '_cleanup_connection') as mock_cleanup, \
-             patch.object(messenger, '_create_connection') as mock_create, \
-             patch.object(messenger, 'is_connected', return_value=True) as mock_is_connected, \
-             patch('src.core.mq_messenger.logger') as mock_logger:
+             patch.object(messenger, '_create_publisher_connection') as mock_create, \
+             patch.object(messenger, 'is_publisher_connected', return_value=True) as mock_is_publisher_connected, \
+             patch('src.core.mq_subscriber.logger') as mock_logger:
             
             result = messenger.reconnect()
             
             assert result is True
             mock_cleanup.assert_called_once()
             mock_create.assert_called_once()
-            mock_is_connected.assert_called_once()
+            mock_is_publisher_connected.assert_called()
             
             # Check logging calls
             info_calls = [call[0][0] for call in mock_logger.info.call_args_list]
@@ -55,28 +55,28 @@ class TestMQSubscriberReconnect:
     def test_reconnect_connection_not_established(self, messenger):
         """Test reconnection when connection is not properly established."""
         with patch.object(messenger, '_cleanup_connection') as mock_cleanup, \
-             patch.object(messenger, '_create_connection') as mock_create, \
-             patch.object(messenger, 'is_connected', return_value=False) as mock_is_connected, \
-             patch('src.core.mq_messenger.logger') as mock_logger:
+             patch.object(messenger, '_create_publisher_connection') as mock_create, \
+             patch.object(messenger, 'is_publisher_connected', return_value=False) as mock_is_publisher_connected, \
+             patch('src.core.mq_subscriber.logger') as mock_logger:
             
             result = messenger.reconnect()
             
             assert result is False
             mock_cleanup.assert_called_once()
             mock_create.assert_called_once()
-            mock_is_connected.assert_called_once()
+            mock_is_publisher_connected.assert_called()
             
             # Check error logging
             error_calls = [call[0][0] for call in mock_logger.error.call_args_list]
-            assert any("RabbitMQ reconnection failed - connection not established" in msg for msg in error_calls)
+            assert any("RabbitMQ reconnection failed - publisher connection not established" in msg for msg in error_calls)
     
-    def test_reconnect_create_connection_exception(self, messenger):
-        """Test reconnection when _create_connection raises exception."""
+    def test_reconnect_create_publisher_connection_exception(self, messenger):
+        """Test reconnection when _create_publisher_connection raises exception."""
         test_exception = Exception("Connection creation failed")
         
         with patch.object(messenger, '_cleanup_connection') as mock_cleanup, \
-             patch.object(messenger, '_create_connection', side_effect=test_exception) as mock_create, \
-             patch('src.core.mq_messenger.logger') as mock_logger:
+             patch.object(messenger, '_create_publisher_connection', side_effect=test_exception) as mock_create, \
+             patch('src.core.mq_subscriber.logger') as mock_logger:
             
             result = messenger.reconnect()
             
@@ -93,7 +93,7 @@ class TestMQSubscriberReconnect:
         cleanup_exception = Exception("Cleanup failed")
         
         with patch.object(messenger, '_cleanup_connection', side_effect=cleanup_exception) as mock_cleanup, \
-             patch('src.core.mq_messenger.logger') as mock_logger:
+             patch('src.core.mq_subscriber.logger') as mock_logger:
             
             result = messenger.reconnect()
             
@@ -104,21 +104,21 @@ class TestMQSubscriberReconnect:
             error_calls = [call[0][0] for call in mock_logger.error.call_args_list]
             assert any("RabbitMQ reconnection failed" in msg for msg in error_calls)
     
-    def test_reconnect_is_connected_exception(self, messenger):
-        """Test reconnection when is_connected raises exception."""
+    def test_reconnect_is_publisher_connected_exception(self, messenger):
+        """Test reconnection when is_publisher_connected raises exception."""
         test_exception = Exception("Connection check failed")
         
         with patch.object(messenger, '_cleanup_connection') as mock_cleanup, \
-             patch.object(messenger, '_create_connection') as mock_create, \
-             patch.object(messenger, 'is_connected', side_effect=test_exception) as mock_is_connected, \
-             patch('src.core.mq_messenger.logger') as mock_logger:
+             patch.object(messenger, '_create_publisher_connection') as mock_create, \
+             patch.object(messenger, 'is_publisher_connected', side_effect=test_exception) as mock_is_publisher_connected, \
+             patch('src.core.mq_subscriber.logger') as mock_logger:
             
             result = messenger.reconnect()
             
             assert result is False
             mock_cleanup.assert_called_once()
             mock_create.assert_called_once()
-            mock_is_connected.assert_called_once()
+            mock_is_publisher_connected.assert_called()
             
             # Check error logging
             error_calls = [call[0][0] for call in mock_logger.error.call_args_list]
@@ -133,8 +133,8 @@ class TestMQSubscriberReconnect:
         mock_channel.is_closed = False
         
         # Set up initial state
-        messenger._connection = mock_connection
-        messenger._channel = mock_channel
+        messenger._publisher_connection = mock_connection
+        messenger._publisher_channel = mock_channel
         
         with patch('pika.BlockingConnection') as mock_blocking_conn, \
              patch.object(mock_connection, 'close') as mock_conn_close, \
@@ -189,9 +189,9 @@ class TestMQSubscriberReconnect:
     def test_reconnect_logging_behavior(self, messenger):
         """Test comprehensive logging during reconnection process."""
         with patch.object(messenger, '_cleanup_connection') as mock_cleanup, \
-             patch.object(messenger, '_create_connection') as mock_create, \
-             patch.object(messenger, 'is_connected', return_value=True) as mock_is_connected, \
-             patch('src.core.mq_messenger.logger') as mock_logger:
+             patch.object(messenger, '_create_publisher_connection') as mock_create, \
+             patch.object(messenger, 'is_publisher_connected', return_value=True) as mock_is_publisher_connected, \
+             patch('src.core.mq_subscriber.logger') as mock_logger:
             
             result = messenger.reconnect()
             
@@ -207,8 +207,8 @@ class TestMQSubscriberReconnect:
         test_exception = ConnectionError("Specific connection error")
         
         with patch.object(messenger, '_cleanup_connection') as mock_cleanup, \
-             patch.object(messenger, '_create_connection', side_effect=test_exception) as mock_create, \
-             patch('src.core.mq_messenger.logger') as mock_logger:
+             patch.object(messenger, '_create_publisher_connection', side_effect=test_exception) as mock_create, \
+             patch('src.core.mq_subscriber.logger') as mock_logger:
             
             result = messenger.reconnect()
             
@@ -226,8 +226,8 @@ class TestMQSubscriberReconnectEdgeCases:
         messenger = MQSubscriber(host="localhost", port=5672, queue_name="test")
         
         with patch.object(messenger, '_cleanup_connection') as mock_cleanup, \
-             patch.object(messenger, '_create_connection') as mock_create, \
-             patch.object(messenger, 'is_connected', return_value=True) as mock_is_connected:
+             patch.object(messenger, '_create_publisher_connection') as mock_create, \
+             patch.object(messenger, 'is_publisher_connected', return_value=True) as mock_is_publisher_connected:
             
             # Call reconnect multiple times
             result1 = messenger.reconnect()
@@ -237,7 +237,7 @@ class TestMQSubscriberReconnectEdgeCases:
             assert all([result1, result2, result3])
             assert mock_cleanup.call_count == 3
             assert mock_create.call_count == 3
-            assert mock_is_connected.call_count == 3
+            assert mock_is_publisher_connected.call_count == 3
     
     def test_reconnect_with_none_connection_and_channel(self):
         """Test reconnect when connection and channel are None."""
@@ -268,7 +268,7 @@ class TestMQSubscriberReconnectEdgeCases:
         
         # Test scenario: cleanup succeeds, create fails
         with patch.object(messenger, '_cleanup_connection') as mock_cleanup, \
-             patch.object(messenger, '_create_connection', side_effect=Exception("Create failed")):
+             patch.object(messenger, '_create_publisher_connection', side_effect=Exception("Create failed")):
             
             result = messenger.reconnect()
             assert result is False
@@ -277,10 +277,10 @@ class TestMQSubscriberReconnectEdgeCases:
         # Reset for next test
         mock_cleanup.reset_mock()
         
-        # Test scenario: both cleanup and create succeed, but is_connected fails
+        # Test scenario: both cleanup and create succeed, but is_publisher_connected fails
         with patch.object(messenger, '_cleanup_connection') as mock_cleanup, \
-             patch.object(messenger, '_create_connection') as mock_create, \
-             patch.object(messenger, 'is_connected', side_effect=Exception("Check failed")):
+             patch.object(messenger, '_create_publisher_connection') as mock_create, \
+             patch.object(messenger, 'is_publisher_connected', side_effect=Exception("Check failed")):
             
             result = messenger.reconnect()
             assert result is False

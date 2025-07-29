@@ -14,7 +14,7 @@ class TestTweetHandler:
             "id": "123", 
             "text": "Bitcoin is rising!", 
             "createdAt": "Tue Jan 24 08:44:50 +0000 2023",
-            "author": {"userName": "user1", "id": "user1_id"},
+            "author": {"username": "user1", "id": "user1_id"},
             "entities": {"urls": []},
             "extended_entities": {}
         }
@@ -64,7 +64,7 @@ class TestTweetHandler:
             "id": "123", 
             "text": "Bitcoin is rising!", 
             "createdAt": "Tue Jan 24 08:44:50 +0000 2023",
-            "author": {"userName": "user1", "id": "user1_id"}
+            "author": {"username": "user1", "id": "user1_id"}
         }
         
         with patch('src.handlers.tweet.map_tweet_data') as mock_transform:
