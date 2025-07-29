@@ -1,6 +1,6 @@
 """Shared schema definitions for message validation."""
 
-from typing import List, Optional, Union
+from typing import List, Any, Optional, Union
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -12,7 +12,7 @@ class DataSource(BaseModel):
 
 class TweetOutput(BaseModel):
     """Schema for transformed tweet data output"""
-    data_source: DataSource = Field(default_factory=DataSource, description="Data source")
+    data_source: DataSource = Field(default_factory=lambda: DataSource(name="", author_name="", author_id=""), description="Data source")
     createdAt: int = Field(0, description="Tweet creation datetime as unix timestamp")
     text: str = Field("", description="Tweet text content")
     media: List[str] = Field(default_factory=list, description="Media URLs from tweet")
@@ -20,14 +20,14 @@ class TweetOutput(BaseModel):
     
     @field_validator('text', mode='before')
     @classmethod
-    def validate_text(cls, v):
+    def validate_text(cls, v: Any) -> str:
         if not isinstance(v, str):
             return ""
         return v
     
     @field_validator('media', 'links', mode='before')
     @classmethod
-    def validate_url_lists(cls, v):
+    def validate_url_lists(cls, v: Any) -> List[str]:
         if not isinstance(v, list):
             return []
         return [url for url in v if isinstance(url, str) and url.strip()]

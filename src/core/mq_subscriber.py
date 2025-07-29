@@ -5,10 +5,11 @@ import os
 import time
 import threading
 from collections import deque
-from typing import Dict, Any, Optional, List, Union, Callable
+from typing import Dict, Any, Optional, List, Union, Callable, Type
 import pika
 from pika.adapters.blocking_connection import BlockingChannel
 from pika.connection import Connection
+from pika.spec import Basic, BasicProperties
 from pydantic import ValidationError
 from ..config.logging_config import get_logger
 from .message_buffer import MessageBuffer
@@ -223,6 +224,9 @@ class MQSubscriber:
             
             # Declare connection_events queue for test messages
             connection_events_queue = "connection_events"
+            if self._publisher_channel is None:
+                raise RuntimeError("Publisher channel is not available")
+            
             self._publisher_channel.queue_declare(queue=connection_events_queue, durable=True)
             
             # Test publish a small message to validate connection
@@ -306,6 +310,9 @@ class MQSubscriber:
         
         try:
             self._ensure_publisher_connection()
+            
+            if self._publisher_channel is None:
+                raise RuntimeError("Publisher channel is not available after connection check")
             
             # Publish message with persistence
             self._publisher_channel.basic_publish(
@@ -497,6 +504,9 @@ class MQSubscriber:
                 # Try to publish the validated message directly (bypassing buffer logic)
                 self._ensure_publisher_connection()
                 
+                if self._publisher_channel is None:
+                    raise RuntimeError("Publisher channel is not available after connection check")
+                
                 json_message = json.dumps(validated_dict, default=str)
                 self._publisher_channel.basic_publish(
                     exchange='',
@@ -564,11 +574,14 @@ class MQSubscriber:
             # Ensure consumer connection is established
             self._ensure_consumer_connection()
             
+            if self._consumer_channel is None:
+                raise RuntimeError("Consumer channel is not available after connection check")
+            
             # Declare the consume queue
             self._consumer_channel.queue_declare(queue=self.consume_queue, durable=True)
             
             # Set up consumer
-            def wrapper_callback(channel, method, properties, body):
+            def wrapper_callback(channel: BlockingChannel, method: Basic.Deliver, properties: BasicProperties, body: bytes) -> None:
                 if not self._stop_consuming.is_set() and self._message_handler:
                     try:
                         self._message_handler(channel, method, properties, body)
@@ -596,6 +609,9 @@ class MQSubscriber:
             
             while not self._stop_consuming.is_set():
                 try:
+                    if self._consumer_connection is None:
+                        logger.error("Consumer connection lost during processing")
+                        break
                     self._consumer_connection.process_data_events(time_limit=1)
                     # Reset error counter on successful processing
                     consecutive_errors = 0
@@ -732,6 +748,6 @@ class MQSubscriber:
         """Context manager entry."""
         return self
     
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+    def __exit__(self, exc_type: Optional[Type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[Any]) -> None:
         """Context manager exit."""
         self.close()

@@ -3,8 +3,11 @@
 import os
 import threading
 import time
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 from ..config.logging_config import get_logger
+
+if TYPE_CHECKING:
+    from .mq_subscriber import MQSubscriber
 
 logger = get_logger(__name__)
 
