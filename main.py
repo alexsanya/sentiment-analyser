@@ -4,13 +4,13 @@ import time
 from typing import Any, Optional
 from dotenv import load_dotenv
 from src.config.logging_config import setup_logging, get_logger
+from src.config.logfire_config import initialize_logfire
 from src.core.mq_subscriber import MQSubscriber
 from src.core.rabbitmq_monitor import RabbitMQConnectionMonitor
 
 # Initialize module-level logger
 setup_logging()  # Auto-detects environment
 logger = get_logger(__name__)
-
 # Global shutdown flag
 shutdown_requested = False
 
@@ -127,4 +127,6 @@ def main() -> None:
 
 if __name__ == "__main__":
     load_dotenv()
+    # Initialize Logfire observability
+    initialize_logfire()
     main()

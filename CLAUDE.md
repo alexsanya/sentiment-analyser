@@ -15,6 +15,7 @@ This is the RabbitMQ message processor microservice, a component designed for co
   - `pydantic` for data validation and schema enforcement
   - `dotenv` for environment variable management
   - `structlog` for structured logging with JSON output
+  - `logfire` for observability and PydanticAI instrumentation
 - **Testing**: 
   - `pytest` for unit testing framework
   - `pytest-mock` for mocking functionality
@@ -218,6 +219,13 @@ RABBITMQ_QUEUE=tweet_events
 RABBITMQ_CONSUME_QUEUE=incoming_messages
 RABBITMQ_USERNAME=admin
 RABBITMQ_PASSWORD=changeme
+
+# Logfire Configuration
+LOGFIRE_ENABLED=true
+LOGFIRE_TOKEN=your_logfire_token_here
+LOGFIRE_SERVICE_NAME=tweets-notifier
+LOGFIRE_ENVIRONMENT=development
+SERVICE_VERSION=0.1.0
 ```
 
 ### RabbitMQ Monitor Configuration
@@ -251,6 +259,34 @@ Example `.env` configuration:
 MESSAGE_BUFFER_ENABLED=true
 MESSAGE_BUFFER_SIZE=10
 ```
+
+### Logfire Configuration
+
+The application includes comprehensive observability through Logfire, providing tracing and metrics for all PydanticAI agents.
+
+- **`LOGFIRE_ENABLED`**: Enable/disable Logfire observability (default: "true")
+- **`LOGFIRE_TOKEN`**: Logfire API token (required for observability)
+- **`LOGFIRE_SERVICE_NAME`**: Service name for tracing (default: "tweets-notifier")
+- **`LOGFIRE_ENVIRONMENT`**: Environment name for tracing (default: value of ENVIRONMENT or "development")
+- **`SERVICE_VERSION`**: Service version for tracing (default: "0.1.0")
+
+Example `.env` configuration:
+```bash
+# Logfire Observability
+LOGFIRE_ENABLED=true
+LOGFIRE_TOKEN=your_logfire_token_here
+LOGFIRE_SERVICE_NAME=tweets-notifier
+LOGFIRE_ENVIRONMENT=production
+SERVICE_VERSION=0.1.0
+```
+
+#### Logfire Features
+
+- **PydanticAI Instrumentation**: Automatic instrumentation of all PydanticAI agents via `instrument_pydantic_ai()`
+- **Agent Execution Tracing**: Detailed spans for TextSearchAgent, ImageSearchAgent, and FirecrawlAgent operations
+- **Performance Metrics**: Execution time, input size, result types, and success/failure tracking
+- **Error Tracking**: Comprehensive error logging with context and stack traces
+- **Correlation**: Integration with existing structured logging for full observability
 
 ## Docker Containerization
 

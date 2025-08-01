@@ -9,10 +9,20 @@ import pytest
 import asyncio
 from syrupy import SnapshotAssertion
 
+from src.config.logfire_config import initialize_logfire
 from src.core.agents.text_search_agent import TextSearchAgent
 from src.core.agents.image_search_agent import ImageSearchAgent
 from src.core.agents.firecrawl_agent import FirecrawlAgent
 from src.models.schemas import SentimentAnalysisResult, TokenDetails
+from dotenv import load_dotenv
+from src.config.logging_config import setup_logging, get_logger
+
+# Initialize Logfire for integration tests
+load_dotenv()
+initialize_logfire()
+
+setup_logging("development")  # Auto-detects environment
+logger = get_logger(__name__)
 
 from .test_data import (
     TEXT_SAMPLES, 
