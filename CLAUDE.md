@@ -73,6 +73,31 @@ uv run pytest tests/test_transformation.py --cov=src.core.transformation --cov-r
 # Run tweet handler tests
 uv run pytest tests/test_tweet_handler.py
 
+# Agent Integration Tests (require OPENAI_API_KEY)
+
+# Run all agent integration tests (requires OpenAI API key)
+OPENAI_API_KEY=your_key uv run pytest tests/integration/test_agents_integration.py -v
+
+# Run specific agent integration tests
+uv run pytest tests/integration/test_agents_integration.py::TestTextSearchAgent -v
+uv run pytest tests/integration/test_agents_integration.py::TestImageSearchAgent -v
+uv run pytest tests/integration/test_agents_integration.py::TestFirecrawlAgent -v
+
+# Run individual test cases for debugging
+uv run pytest tests/integration/test_agents_integration.py::TestIndividualTextCases::test_polygon_explicit_chain_evm_address -v
+
+# Update snapshots when agent responses change
+uv run pytest tests/integration/test_agents_integration.py --snapshot-update
+
+# Run integration tests with specific marker
+uv run pytest -m integration -v
+
+# Skip integration tests (run only unit tests)
+uv run pytest -m "not integration" -v
+
+# Run integration tests with coverage
+uv run pytest tests/integration/ --cov=src.core.agents --cov-report=term-missing
+
 # Docker Development Commands
 
 # Build and start all services (RabbitMQ + News Watcher)

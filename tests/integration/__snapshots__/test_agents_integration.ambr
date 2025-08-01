@@ -1,0 +1,255 @@
+# serializer version: 1
+# name: TestAgentReliability.test_text_agent_empty_input[text_search_empty_input]
+  dict({
+  })
+# ---
+# name: TestAgentReliability.test_text_agent_very_long_input[text_search_very_long_input]
+  dict({
+    'chain_defined_explicitly': False,
+    'chain_id': 1,
+    'chain_name': 'Ethereum Mainnet',
+    'definition_fragment': None,
+    'is_release': True,
+    'token_address': '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+  })
+# ---
+# name: TestFirecrawlAgent.test_web_scraping_analysis[https://flockerz.com/-flockerz_token_website][firecrawl_flockerz_token_website]
+  dict({
+    'chain_defined_explicitly': True,
+    'chain_id': 1,
+    'chain_name': 'Ethereum Mainnet',
+    'definition_fragment': '$FLOCK is now ready for public trading.',
+    'is_release': True,
+    'token_address': '0xb33d999469a7e6b9ebc25a3a05248287b855ed46',
+  })
+# ---
+# name: TestFirecrawlAgent.test_web_scraping_analysis[https://gettrumpmemes.com/-trump_memes_website][firecrawl_trump_memes_website]
+  dict({
+    'chain_defined_explicitly': True,
+    'chain_id': None,
+    'chain_name': 'Solana',
+    'definition_fragment': 'Which blockchain network are the Trump Memes minted? Solana',
+    'is_release': True,
+    'token_address': '6p6xgHyF7AeE6TZkSmFsko444wqoP15icUSqi2jfGiPN',
+  })
+# ---
+# name: TestImageSearchAgent.test_image_analysis[https://bitcoinworld.co.in/wp-content/uploads/Melania-Trumps-Meme-Coin-MELANIA-B.jpg-non_announcement_image][image_search_non_announcement_image]
+  dict({
+  })
+# ---
+# name: TestImageSearchAgent.test_image_analysis[https://lh7-rt.googleusercontent.com/docsz/AD_4nXcNy9kHtzbuH-N-F9B8zy7oqkUobYkzXWhAKqI4qXP7JSIihBNHhJJfz-1gmvJDnxYiTPHRinIe8wBQ3VMBZU0aGxyb6U8k6SWGU5NleZg2AVGyxI7WuyJGcUJ73oG_THgfF_bX?key=qxx7aSSAQfwoulEynZFGQMDH-melania_token_announcement][image_search_melania_token_announcement]
+  dict({
+    'chain_defined_explicitly': False,
+    'chain_id': None,
+    'chain_name': 'Solana',
+    'definition_fragment': None,
+    'is_release': True,
+    'token_address': 'FUAfBo2jgks6gB4Z4LfZkqSZgzNucisEHqnNebaRxM1P',
+  })
+# ---
+# name: TestImageSearchAgent.test_image_analysis[https://pbs.twimg.com/media/GhivrlDWAAA7Ex3?format=jpg&name=medium-trump_token_announcement][image_search_trump_token_announcement]
+  dict({
+    'chain_defined_explicitly': None,
+    'chain_id': None,
+    'chain_name': 'Solana',
+    'definition_fragment': None,
+    'is_release': None,
+    'token_address': '6p6xgHyF7AeE6TZkSmFsko444wqoP15icUSqj2jfGiPN',
+  })
+# ---
+# name: TestIndividualImageCases.test_melania_token_announcement
+  dict({
+    'chain_defined_explicitly': False,
+    'chain_id': None,
+    'chain_name': 'Solana',
+    'definition_fragment': None,
+    'is_release': True,
+    'token_address': 'FUAfBo2jgks6gB4Z4LfZkqSZgzNucisEHqnNebaRxM1P',
+  })
+# ---
+# name: TestIndividualImageCases.test_non_announcement_image
+  dict({
+  })
+# ---
+# name: TestIndividualImageCases.test_trump_token_announcement
+  dict({
+    'chain_defined_explicitly': False,
+    'chain_id': None,
+    'chain_name': 'Solana',
+    'definition_fragment': None,
+    'is_release': True,
+    'token_address': '6p6xgHyF7AeE6TZkSmFsko444wqoP15icUSqj2jfGiPN',
+  })
+# ---
+# name: TestIndividualTextCases.test_no_announcement_no_token
+  dict({
+  })
+# ---
+# name: TestIndividualTextCases.test_no_chain_evm_address_infer_ethereum
+  dict({
+    'chain_defined_explicitly': False,
+    'chain_id': 1,
+    'chain_name': 'Ethereum Mainnet',
+    'definition_fragment': None,
+    'is_release': True,
+    'token_address': '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+  })
+# ---
+# name: TestIndividualTextCases.test_no_chain_solana_address_infer_solana
+  dict({
+    'chain_defined_explicitly': False,
+    'chain_id': None,
+    'chain_name': 'Solana',
+    'definition_fragment': None,
+    'is_release': True,
+    'token_address': 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB',
+  })
+# ---
+# name: TestIndividualTextCases.test_polygon_explicit_chain_evm_address
+  dict({
+    'chain_defined_explicitly': True,
+    'chain_id': 137,
+    'chain_name': 'Polygon',
+    'definition_fragment': 'on Polygon blockchain',
+    'is_release': True,
+    'token_address': '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+  })
+# ---
+# name: TestIndividualTextCases.test_purchase_not_release_solana_address
+  dict({
+    'chain_defined_explicitly': False,
+    'chain_id': None,
+    'chain_name': 'Solana',
+    'definition_fragment': None,
+    'is_release': False,
+    'token_address': '6p6xgHyF7AeE6TZkSmFsko444wqoP15icUSqi2jfGiPN',
+  })
+# ---
+# name: TestIndividualTextCases.test_solana_explicit_chain_solana_address
+  dict({
+    'chain_defined_explicitly': True,
+    'chain_id': None,
+    'chain_name': 'Solana',
+    'definition_fragment': 'Solana Blockchain',
+    'is_release': True,
+    'token_address': 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB',
+  })
+# ---
+# name: TestIndividualWebCases.test_flockerz_token_website
+  dict({
+    'chain_defined_explicitly': True,
+    'chain_id': 1,
+    'chain_name': 'Ethereum Mainnet',
+    'definition_fragment': '$FLOCK takes over the Ethereum',
+    'is_release': True,
+    'token_address': '0xb33d999469a7e6b9ebc25a3a05248287b855ed46',
+  })
+# ---
+# name: TestIndividualWebCases.test_trump_memes_website
+  dict({
+    'chain_defined_explicitly': True,
+    'chain_id': None,
+    'chain_name': 'Solana',
+    'definition_fragment': 'Which blockchain network are the Trump Memes minted? Solana',
+    'is_release': True,
+    'token_address': '6p6xgHyF7AeE6TZkSmFsko444wqoP15icUSqi2jfGiPN',
+  })
+# ---
+# name: TestTextSearchAgent.test_text_analysis[Accumulationg Bonk on ETH mainnet: 0x1151CB3d861920e07a38e03eEAd12C32178567F6-accumulating_explicit_eth_mainnet][text_search_accumulating_explicit_eth_mainnet]
+  dict({
+    'chain_defined_explicitly': True,
+    'chain_id': 1,
+    'chain_name': 'Ethereum Mainnet',
+    'definition_fragment': 'on ETH mainnet',
+    'is_release': False,
+    'token_address': '0x1151CB3d861920e07a38e03eEAd12C32178567F6',
+  })
+# ---
+# name: TestTextSearchAgent.test_text_analysis[Accumulationg Bonk: 0x1151CB3d861920e07a38e03eEAd12C32178567F6-accumulating_not_release_evm_address][text_search_accumulating_not_release_evm_address]
+  dict({
+    'chain_defined_explicitly': False,
+    'chain_id': 1,
+    'chain_name': 'Ethereum Mainnet',
+    'definition_fragment': None,
+    'is_release': True,
+    'token_address': '0x1151CB3d861920e07a38e03eEAd12C32178567F6',
+  })
+# ---
+# name: TestTextSearchAgent.test_text_analysis[Join my webinar tomorrow!-no_announcement_no_token][text_search_no_announcement_no_token]
+  dict({
+  })
+# ---
+# name: TestTextSearchAgent.test_text_analysis[Just bought a bad of Trump coin (6p6xgHyF7AeE6TZkSmFsko444wqoP15icUSqi2jfGiPN)-purchase_not_release_solana_address][text_search_purchase_not_release_solana_address]
+  dict({
+    'chain_defined_explicitly': False,
+    'chain_id': None,
+    'chain_name': 'Solana',
+    'definition_fragment': None,
+    'is_release': False,
+    'token_address': '6p6xgHyF7AeE6TZkSmFsko444wqoP15icUSqi2jfGiPN',
+  })
+# ---
+# name: TestTextSearchAgent.test_text_analysis[Just bought a bad of Trump coin on solana: (6p6xgHyF7AeE6TZkSmFsko444wqoP15icUSqi2jfGiPN)-purchase_explicit_solana_chain][text_search_purchase_explicit_solana_chain]
+  dict({
+    'chain_defined_explicitly': True,
+    'chain_id': None,
+    'chain_name': 'Solana',
+    'definition_fragment': 'bought a bad of Trump coin on solana',
+    'is_release': False,
+    'token_address': '6p6xgHyF7AeE6TZkSmFsko444wqoP15icUSqi2jfGiPN',
+  })
+# ---
+# name: TestTextSearchAgent.test_text_analysis[Just bought a bad of Trump coin on solana: (6p6xgHyF7AeE6TZkSmFsko444wqoP15icUSqi2jfGiPN)-purchase_explicit_solana_chain_duplicate][text_search_purchase_explicit_solana_chain_duplicate]
+  dict({
+    'chain_defined_explicitly': True,
+    'chain_id': None,
+    'chain_name': 'Solana',
+    'definition_fragment': 'on solana',
+    'is_release': False,
+    'token_address': '6p6xgHyF7AeE6TZkSmFsko444wqoP15icUSqi2jfGiPN',
+  })
+# ---
+# name: TestTextSearchAgent.test_text_analysis[My new token is live on Solana Blockchain: Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB. Buy now!-solana_explicit_chain_solana_address][text_search_solana_explicit_chain_solana_address]
+  dict({
+    'chain_defined_explicitly': True,
+    'chain_id': None,
+    'chain_name': 'Solana',
+    'definition_fragment': 'on Solana Blockchain',
+    'is_release': True,
+    'token_address': 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB',
+  })
+# ---
+# name: TestTextSearchAgent.test_text_analysis[My new token is live: 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48. Happpy trading!-no_chain_evm_address_infer_ethereum][text_search_no_chain_evm_address_infer_ethereum]
+  dict({
+    'chain_defined_explicitly': False,
+    'chain_id': 1,
+    'chain_name': 'Ethereum Mainnet',
+    'definition_fragment': None,
+    'is_release': True,
+    'token_address': '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+  })
+# ---
+# name: TestTextSearchAgent.test_text_analysis[My new token is live: Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB. Buy now!-no_chain_solana_address_infer_solana][text_search_no_chain_solana_address_infer_solana]
+  dict({
+    'chain_defined_explicitly': False,
+    'chain_id': None,
+    'chain_name': 'Solana',
+    'definition_fragment': None,
+    'is_release': True,
+    'token_address': 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB',
+  })
+# ---
+# name: TestTextSearchAgent.test_text_analysis[My new token just released - follow the link to buy!-release_announcement_no_details][text_search_release_announcement_no_details]
+  dict({
+  })
+# ---
+# name: TestTextSearchAgent.test_text_analysis[My new token on Polygon blockchain: 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48. Buy it now!-polygon_explicit_chain_evm_address][text_search_polygon_explicit_chain_evm_address]
+  dict({
+    'chain_defined_explicitly': True,
+    'chain_id': 137,
+    'chain_name': 'Polygon',
+    'definition_fragment': 'on Polygon blockchain',
+    'is_release': True,
+    'token_address': '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+  })
+# ---
