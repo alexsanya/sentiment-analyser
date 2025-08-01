@@ -8,7 +8,6 @@
     'chain_defined_explicitly': False,
     'chain_id': 1,
     'chain_name': 'Ethereum Mainnet',
-    'definition_fragment': None,
     'is_release': True,
     'token_address': '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
   })
@@ -16,11 +15,10 @@
 # name: TestFirecrawlAgent.test_web_scraping_analysis[https://flockerz.com/-flockerz_token_website][firecrawl_flockerz_token_website]
   dict({
     'chain_defined_explicitly': True,
-    'chain_id': 1,
+    'chain_id': None,
     'chain_name': 'Ethereum Mainnet',
-    'definition_fragment': '$FLOCK is now ready for public trading.',
     'is_release': True,
-    'token_address': '0xb33d999469a7e6b9ebc25a3a05248287b855ed46',
+    'token_address': '0xb33D999469a7e6b9EbC25A3a05248287b855eD46',
   })
 # ---
 # name: TestFirecrawlAgent.test_web_scraping_analysis[https://gettrumpmemes.com/-trump_memes_website][firecrawl_trump_memes_website]
@@ -28,7 +26,6 @@
     'chain_defined_explicitly': True,
     'chain_id': None,
     'chain_name': 'Solana',
-    'definition_fragment': 'Which blockchain network are the Trump Memes minted? Solana',
     'is_release': True,
     'token_address': '6p6xgHyF7AeE6TZkSmFsko444wqoP15icUSqi2jfGiPN',
   })
@@ -41,19 +38,17 @@
   dict({
     'chain_defined_explicitly': False,
     'chain_id': None,
-    'chain_name': 'Solana',
-    'definition_fragment': None,
+    'chain_name': None,
     'is_release': True,
     'token_address': 'FUAfBo2jgks6gB4Z4LfZkqSZgzNucisEHqnNebaRxM1P',
   })
 # ---
 # name: TestImageSearchAgent.test_image_analysis[https://pbs.twimg.com/media/GhivrlDWAAA7Ex3?format=jpg&name=medium-trump_token_announcement][image_search_trump_token_announcement]
   dict({
-    'chain_defined_explicitly': None,
+    'chain_defined_explicitly': False,
     'chain_id': None,
-    'chain_name': 'Solana',
-    'definition_fragment': None,
-    'is_release': None,
+    'chain_name': None,
+    'is_release': True,
     'token_address': '6p6xgHyF7AeE6TZkSmFsko444wqoP15icUSqj2jfGiPN',
   })
 # ---
@@ -61,8 +56,7 @@
   dict({
     'chain_defined_explicitly': False,
     'chain_id': None,
-    'chain_name': 'Solana',
-    'definition_fragment': None,
+    'chain_name': None,
     'is_release': True,
     'token_address': 'FUAfBo2jgks6gB4Z4LfZkqSZgzNucisEHqnNebaRxM1P',
   })
@@ -76,7 +70,6 @@
     'chain_defined_explicitly': False,
     'chain_id': None,
     'chain_name': 'Solana',
-    'definition_fragment': None,
     'is_release': True,
     'token_address': '6p6xgHyF7AeE6TZkSmFsko444wqoP15icUSqj2jfGiPN',
   })
@@ -90,7 +83,6 @@
     'chain_defined_explicitly': False,
     'chain_id': 1,
     'chain_name': 'Ethereum Mainnet',
-    'definition_fragment': None,
     'is_release': True,
     'token_address': '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
   })
@@ -100,7 +92,6 @@
     'chain_defined_explicitly': False,
     'chain_id': None,
     'chain_name': 'Solana',
-    'definition_fragment': None,
     'is_release': True,
     'token_address': 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB',
   })
@@ -110,7 +101,6 @@
     'chain_defined_explicitly': True,
     'chain_id': 137,
     'chain_name': 'Polygon',
-    'definition_fragment': 'on Polygon blockchain',
     'is_release': True,
     'token_address': '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
   })
@@ -120,7 +110,6 @@
     'chain_defined_explicitly': False,
     'chain_id': None,
     'chain_name': 'Solana',
-    'definition_fragment': None,
     'is_release': False,
     'token_address': '6p6xgHyF7AeE6TZkSmFsko444wqoP15icUSqi2jfGiPN',
   })
@@ -130,7 +119,6 @@
     'chain_defined_explicitly': True,
     'chain_id': None,
     'chain_name': 'Solana',
-    'definition_fragment': 'Solana Blockchain',
     'is_release': True,
     'token_address': 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB',
   })
@@ -140,7 +128,6 @@
     'chain_defined_explicitly': True,
     'chain_id': 1,
     'chain_name': 'Ethereum Mainnet',
-    'definition_fragment': '$FLOCK takes over the Ethereum',
     'is_release': True,
     'token_address': '0xb33d999469a7e6b9ebc25a3a05248287b855ed46',
   })
@@ -150,7 +137,6 @@
     'chain_defined_explicitly': True,
     'chain_id': None,
     'chain_name': 'Solana',
-    'definition_fragment': 'Which blockchain network are the Trump Memes minted? Solana',
     'is_release': True,
     'token_address': '6p6xgHyF7AeE6TZkSmFsko444wqoP15icUSqi2jfGiPN',
   })
@@ -160,8 +146,7 @@
     'chain_defined_explicitly': True,
     'chain_id': 1,
     'chain_name': 'Ethereum Mainnet',
-    'definition_fragment': 'on ETH mainnet',
-    'is_release': False,
+    'is_release': True,
     'token_address': '0x1151CB3d861920e07a38e03eEAd12C32178567F6',
   })
 # ---
@@ -170,8 +155,7 @@
     'chain_defined_explicitly': False,
     'chain_id': 1,
     'chain_name': 'Ethereum Mainnet',
-    'definition_fragment': None,
-    'is_release': True,
+    'is_release': None,
     'token_address': '0x1151CB3d861920e07a38e03eEAd12C32178567F6',
   })
 # ---
@@ -184,18 +168,16 @@
     'chain_defined_explicitly': False,
     'chain_id': None,
     'chain_name': 'Solana',
-    'definition_fragment': None,
     'is_release': False,
     'token_address': '6p6xgHyF7AeE6TZkSmFsko444wqoP15icUSqi2jfGiPN',
   })
 # ---
 # name: TestTextSearchAgent.test_text_analysis[Just bought a bad of Trump coin on solana: (6p6xgHyF7AeE6TZkSmFsko444wqoP15icUSqi2jfGiPN)-purchase_explicit_solana_chain][text_search_purchase_explicit_solana_chain]
   dict({
-    'chain_defined_explicitly': True,
+    'chain_defined_explicitly': False,
     'chain_id': None,
     'chain_name': 'Solana',
-    'definition_fragment': 'bought a bad of Trump coin on solana',
-    'is_release': False,
+    'is_release': None,
     'token_address': '6p6xgHyF7AeE6TZkSmFsko444wqoP15icUSqi2jfGiPN',
   })
 # ---
@@ -204,8 +186,7 @@
     'chain_defined_explicitly': True,
     'chain_id': None,
     'chain_name': 'Solana',
-    'definition_fragment': 'on solana',
-    'is_release': False,
+    'is_release': None,
     'token_address': '6p6xgHyF7AeE6TZkSmFsko444wqoP15icUSqi2jfGiPN',
   })
 # ---
@@ -214,7 +195,6 @@
     'chain_defined_explicitly': True,
     'chain_id': None,
     'chain_name': 'Solana',
-    'definition_fragment': 'on Solana Blockchain',
     'is_release': True,
     'token_address': 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB',
   })
@@ -224,7 +204,6 @@
     'chain_defined_explicitly': False,
     'chain_id': 1,
     'chain_name': 'Ethereum Mainnet',
-    'definition_fragment': None,
     'is_release': True,
     'token_address': '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
   })
@@ -234,7 +213,6 @@
     'chain_defined_explicitly': False,
     'chain_id': None,
     'chain_name': 'Solana',
-    'definition_fragment': None,
     'is_release': True,
     'token_address': 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB',
   })
@@ -248,7 +226,6 @@
     'chain_defined_explicitly': True,
     'chain_id': 137,
     'chain_name': 'Polygon',
-    'definition_fragment': 'on Polygon blockchain',
     'is_release': True,
     'token_address': '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
   })

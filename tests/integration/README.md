@@ -67,8 +67,9 @@ uv run pytest -m "not integration" -v
 
 ### Snapshot Testing
 - Uses **Syrupy** for JSON snapshot comparison
-- Agent responses are serialized to JSON using `model_dump()`
-- Snapshots stored in `__snapshots__/` directory
+- Agent responses are serialized to JSON using custom `serialize_for_snapshot()` function
+- **Field Exclusion**: The `definition_fragment` field is excluded from `TokenDetails` snapshots for stability
+- Snapshots stored in `__snapshots__/` directory  
 - Each test case has named snapshots for easy identification
 
 ### Test Organization
@@ -84,10 +85,11 @@ uv run pytest -m "not integration" -v
   "chain_name": "Polygon", 
   "is_release": true,
   "chain_defined_explicitly": true,
-  "definition_fragment": "My new token on Polygon blockchain:",
   "token_address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
 }
 ```
+
+**Note**: The `definition_fragment` field is excluded from snapshots since it contains variable text snippets that may differ between API calls, ensuring stable and reliable snapshot comparisons.
 
 ## Test Cases Coverage
 

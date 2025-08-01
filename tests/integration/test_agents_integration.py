@@ -12,7 +12,7 @@ from syrupy import SnapshotAssertion
 from src.core.agents.text_search_agent import TextSearchAgent
 from src.core.agents.image_search_agent import ImageSearchAgent
 from src.core.agents.firecrawl_agent import FirecrawlAgent
-from src.models.schemas import SentimentAnalysisResult
+from src.models.schemas import SentimentAnalysisResult, TokenDetails
 
 from .test_data import (
     TEXT_SAMPLES, 
@@ -22,6 +22,23 @@ from .test_data import (
     WEB_URLS,
     WEB_DESCRIPTIONS
 )
+
+
+def serialize_for_snapshot(result):
+    """Serialize agent result for snapshot testing, excluding variable fields.
+    
+    Excludes the 'definition_fragment' field from TokenDetails to ensure
+    stable snapshots since this field contains variable text snippets.
+    """
+    if hasattr(result, 'model_dump'):
+        if isinstance(result, TokenDetails):
+            return result.model_dump(exclude={'definition_fragment'})
+        return result.model_dump()
+    else:
+        # Fallback for older Pydantic versions
+        if hasattr(result, '__class__') and result.__class__.__name__ == 'TokenDetails':
+            return result.dict(exclude={'definition_fragment'})
+        return result.dict()
 
 
 # Mark all tests in this module as integration tests
@@ -68,11 +85,8 @@ class TestTextSearchAgent:
         # Verify result is one of the expected types
         assert isinstance(result, SentimentAnalysisResult.__args__)
         
-        # Serialize to dict for snapshot comparison
-        if hasattr(result, 'model_dump'):
-            result_json = result.model_dump()
-        else:
-            result_json = result.dict()
+        # Serialize to dict for snapshot comparison (excluding variable fields)
+        result_json = serialize_for_snapshot(result)
             
         # Use description in snapshot name for clarity
         assert result_json == snapshot(name=f"text_search_{description}")
@@ -90,11 +104,8 @@ class TestImageSearchAgent:
         # Verify result is one of the expected types
         assert isinstance(result, SentimentAnalysisResult.__args__)
         
-        # Serialize to dict for snapshot comparison
-        if hasattr(result, 'model_dump'):
-            result_json = result.model_dump()
-        else:
-            result_json = result.dict()
+        # Serialize to dict for snapshot comparison (excluding variable fields)
+        result_json = serialize_for_snapshot(result)
             
         # Use description in snapshot name for clarity
         assert result_json == snapshot(name=f"image_search_{description}")
@@ -115,11 +126,8 @@ class TestFirecrawlAgent:
         # Verify result is one of the expected types
         assert isinstance(result, SentimentAnalysisResult.__args__)
         
-        # Serialize to dict for snapshot comparison
-        if hasattr(result, 'model_dump'):
-            result_json = result.model_dump()
-        else:
-            result_json = result.dict()
+        # Serialize to dict for snapshot comparison (excluding variable fields)
+        result_json = serialize_for_snapshot(result)
             
         # Use description in snapshot name for clarity
         assert result_json == snapshot(name=f"firecrawl_{description}")
@@ -133,10 +141,7 @@ class TestAgentReliability:
         """Test TextSearchAgent with empty input."""
         result = await text_search_agent.run("")
         
-        if hasattr(result, 'model_dump'):
-            result_json = result.model_dump()
-        else:
-            result_json = result.dict()
+        result_json = serialize_for_snapshot(result)
             
         assert result_json == snapshot(name="text_search_empty_input")
     
@@ -146,10 +151,7 @@ class TestAgentReliability:
         long_text = "This is a test message. " * 100 + "My new token: 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
         result = await text_search_agent.run(long_text)
         
-        if hasattr(result, 'model_dump'):
-            result_json = result.model_dump()
-        else:
-            result_json = result.dict()
+        result_json = serialize_for_snapshot(result)
             
         assert result_json == snapshot(name="text_search_very_long_input")
 
@@ -163,7 +165,7 @@ class TestIndividualTextCases:
         """Test case 0: Explicit Polygon chain with EVM address."""
         text = TEXT_SAMPLES[0]
         result = await text_search_agent.run(text)
-        result_json = result.model_dump() if hasattr(result, 'model_dump') else result.dict()
+        result_json = serialize_for_snapshot(result)
         assert result_json == snapshot
         
     @pytest.mark.asyncio
@@ -171,7 +173,7 @@ class TestIndividualTextCases:
         """Test case 1: No chain info, EVM address (should infer Ethereum)."""
         text = TEXT_SAMPLES[1]
         result = await text_search_agent.run(text)
-        result_json = result.model_dump() if hasattr(result, 'model_dump') else result.dict()
+        result_json = serialize_for_snapshot(result)
         assert result_json == snapshot
         
     @pytest.mark.asyncio
@@ -179,7 +181,7 @@ class TestIndividualTextCases:
         """Test case 2: Explicit Solana chain with Solana address."""
         text = TEXT_SAMPLES[2]
         result = await text_search_agent.run(text)
-        result_json = result.model_dump() if hasattr(result, 'model_dump') else result.dict()
+        result_json = serialize_for_snapshot(result)
         assert result_json == snapshot
         
     @pytest.mark.asyncio
@@ -187,7 +189,7 @@ class TestIndividualTextCases:
         """Test case 3: No chain info, Solana address (should infer Solana)."""
         text = TEXT_SAMPLES[3]
         result = await text_search_agent.run(text)
-        result_json = result.model_dump() if hasattr(result, 'model_dump') else result.dict()
+        result_json = serialize_for_snapshot(result)
         assert result_json == snapshot
         
     @pytest.mark.asyncio
@@ -195,7 +197,7 @@ class TestIndividualTextCases:
         """Test case 4: No announcement, no token."""
         text = TEXT_SAMPLES[4]
         result = await text_search_agent.run(text)
-        result_json = result.model_dump() if hasattr(result, 'model_dump') else result.dict()
+        result_json = serialize_for_snapshot(result)
         assert result_json == snapshot
         
     @pytest.mark.asyncio
@@ -203,7 +205,7 @@ class TestIndividualTextCases:
         """Test case 5: Purchase mention, not release (Solana address)."""
         text = TEXT_SAMPLES[5]
         result = await text_search_agent.run(text)
-        result_json = result.model_dump() if hasattr(result, 'model_dump') else result.dict()
+        result_json = serialize_for_snapshot(result)
         assert result_json == snapshot
 
 
@@ -216,7 +218,7 @@ class TestIndividualImageCases:
         """Test Trump token announcement image."""
         image_url = IMAGE_URLS[0]
         result = await image_search_agent.run(image_url)
-        result_json = result.model_dump() if hasattr(result, 'model_dump') else result.dict()
+        result_json = serialize_for_snapshot(result)
         assert result_json == snapshot
         
     @pytest.mark.asyncio
@@ -224,7 +226,7 @@ class TestIndividualImageCases:
         """Test Melania token announcement image."""
         image_url = IMAGE_URLS[1]
         result = await image_search_agent.run(image_url)
-        result_json = result.model_dump() if hasattr(result, 'model_dump') else result.dict()
+        result_json = serialize_for_snapshot(result)
         assert result_json == snapshot
         
     @pytest.mark.asyncio
@@ -232,7 +234,7 @@ class TestIndividualImageCases:
         """Test non-announcement image."""
         image_url = IMAGE_URLS[2]
         result = await image_search_agent.run(image_url)
-        result_json = result.model_dump() if hasattr(result, 'model_dump') else result.dict()
+        result_json = serialize_for_snapshot(result)
         assert result_json == snapshot
 
 
@@ -244,7 +246,7 @@ class TestIndividualWebCases:
         """Test Flockerz token website."""
         web_url = WEB_URLS[0]
         result = await firecrawl_agent.run(web_url)
-        result_json = result.model_dump() if hasattr(result, 'model_dump') else result.dict()
+        result_json = serialize_for_snapshot(result)
         assert result_json == snapshot
         
     @pytest.mark.asyncio
@@ -252,5 +254,5 @@ class TestIndividualWebCases:
         """Test Trump memes website."""
         web_url = WEB_URLS[1]
         result = await firecrawl_agent.run(web_url)
-        result_json = result.model_dump() if hasattr(result, 'model_dump') else result.dict()
+        result_json = serialize_for_snapshot(result)
         assert result_json == snapshot
