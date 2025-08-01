@@ -117,7 +117,7 @@ async def handle_tweet_event_async(tweet_data: Dict[str, Any]) -> TweetOutput:
         logger.info(
             "Tweet processed successfully with sentiment analysis",
             tweet_id=tweet_data.get("id"),
-            author=tweet_data.get("author", {}).get("username"),
+            author=tweet_data.get("author_name"),
             sentiment_result_type=type(sentiment_result).__name__
         )
         

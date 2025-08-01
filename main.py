@@ -7,6 +7,7 @@ from src.config.logging_config import setup_logging, get_logger
 from src.config.logfire_config import initialize_logfire
 from src.core.mq_subscriber import MQSubscriber
 from src.core.rabbitmq_monitor import RabbitMQConnectionMonitor
+from src.handlers.tweet import handle_tweet_event
 
 # Initialize module-level logger
 setup_logging()  # Auto-detects environment
@@ -65,9 +66,18 @@ def message_handler(channel, method, properties, body):
             message_size=len(message),
             message_preview=message[:200] + "..." if len(message) > 200 else message
         )
-        
-        # Acknowledge the message
-        channel.basic_ack(delivery_tag=method.delivery_tag)
+
+        try:
+            # Analyze the tweet sentiment
+            tweet_output = handle_tweet_event(message)  
+            channel.basic_ack(delivery_tag=method.delivery_tag)
+        except Exception as e:
+            logger.error(
+                "Error analyzing tweet sentiment",
+                error=str(e),
+                message=message
+            )
+            channel.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
         
     except Exception as e:
         logger.error(
