@@ -9,7 +9,7 @@ from ..core.sentiment_analyzer import (
     ImageSearchAgent, 
     FirecrawlAgent,
     merge_agent_results,
-    get_sentiment_analyzer_config
+    get_sentiment_config
 )
 from ..models.schemas import TweetOutput, SentimentAnalysisResult, NoTokenFound
 
@@ -27,10 +27,10 @@ async def analyze_tweet_sentiment(tweet_output: TweetOutput) -> SentimentAnalysi
         Merged sentiment analysis result from all agents
     """
     try:
-        config = get_sentiment_analyzer_config()
-        model_name = config['ai_model_name']
-        firecrawl_url = config['firecrawl_mcp_server_url']
-        max_concurrent = config['max_concurrent_analysis']
+        config = get_sentiment_config()
+        model_name = config.model_name
+        firecrawl_url = config.firecrawl_mcp_server_url
+        max_concurrent = config.max_concurrent_analysis
         
         # Create agents
         text_agent = TextSearchAgent(model_name=model_name)
