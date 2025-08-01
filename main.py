@@ -1,3 +1,4 @@
+import json
 import os
 import signal
 import time
@@ -68,14 +69,26 @@ def message_handler(channel, method, properties, body):
         )
 
         try:
+            # Parse JSON message to dictionary
+            tweet_data = json.loads(message)
+        except json.JSONDecodeError as e:
+            logger.error(
+                "Invalid JSON message received",
+                error=str(e),
+                message=message[:500] + "..." if len(message) > 500 else message
+            )
+            channel.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+            return
+            
+        try:
             # Analyze the tweet sentiment
-            tweet_output = handle_tweet_event(message)  
+            tweet_output = handle_tweet_event(tweet_data)  
             channel.basic_ack(delivery_tag=method.delivery_tag)
         except Exception as e:
             logger.error(
                 "Error analyzing tweet sentiment",
                 error=str(e),
-                message=message
+                message=message[:500] + "..." if len(message) > 500 else message
             )
             channel.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
         

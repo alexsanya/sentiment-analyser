@@ -75,6 +75,7 @@ class TestTweetHandler:
             "id": "123", 
             "text": "Bitcoin is rising!", 
             "createdAt": "Tue Jan 24 08:44:50 +0000 2023",
+            "author_name": "user1",
             "author": {"username": "user1", "id": "user1_id"}
         }
         
@@ -105,3 +106,93 @@ class TestTweetHandler:
                         author="user1",
                         sentiment_result_type="NoTokenFound"
                     )
+    
+    def test_handle_tweet_event_with_tsunami_warning_data(self):
+        """Test tweet handler with real tsunami warning tweet data."""
+        tweet_data = {
+            "data_source": {
+                "name": "Twitter", 
+                "author_name": "realDonaldTrump", 
+                "author_id": "25073877"
+            }, 
+            "createdAt": 1753841779, 
+            "text": "Due to a massive earthquake that occurred in the Pacific Ocean, a Tsunami Warning is in effect for those living in Hawaii. A Tsunami Watch is in effect for Alaska and the Pacific Coast of the United States. Japan is also in the way. Please visit https://t.co/V5RZFDxYzl for the latest information. STAY STRONG AND STAY SAFE!", 
+            "media": ["https://pbs.twimg.com/media/GhivrlDWAAA7Ex3?format=jpg&name=medium"], 
+            "links": ["https://tsunami.gov/"]
+        }
+        
+        expected_tweet_output = TweetOutput(
+            data_source=DataSource(
+                name="Twitter",
+                author_name="realDonaldTrump",
+                author_id="25073877"
+            ),
+            createdAt=1753841779,
+            text="Due to a massive earthquake that occurred in the Pacific Ocean, a Tsunami Warning is in effect for those living in Hawaii. A Tsunami Watch is in effect for Alaska and the Pacific Coast of the United States. Japan is also in the way. Please visit https://t.co/V5RZFDxYzl for the latest information. STAY STRONG AND STAY SAFE!",
+            media=["https://pbs.twimg.com/media/GhivrlDWAAA7Ex3?format=jpg&name=medium"],
+            links=["https://tsunami.gov/"]
+        )
+        
+        with patch('src.handlers.tweet.map_tweet_data') as mock_transform:
+            with patch('src.handlers.tweet.analyze_tweet_sentiment', new_callable=AsyncMock) as mock_sentiment:
+                mock_transform.return_value = expected_tweet_output
+                mock_sentiment.return_value = NoTokenFound()
+                
+                result = handle_tweet_event(tweet_data)
+                
+                # Verify transformation was called
+                mock_transform.assert_called_once_with(tweet_data)
+                
+                # Verify sentiment analysis was called
+                mock_sentiment.assert_called_once_with(expected_tweet_output)
+                
+                # Verify returned data matches expected output
+                assert result.createdAt == 1753841779
+                assert result.text == expected_tweet_output.text
+                assert result.data_source.author_name == "realDonaldTrump"
+                assert result.data_source.author_id == "25073877"
+                assert result.media == ["https://pbs.twimg.com/media/GhivrlDWAAA7Ex3?format=jpg&name=medium"]
+                assert result.links == ["https://tsunami.gov/"]
+                assert isinstance(result.sentiment_analysis, NoTokenFound)
+    
+    def test_handle_tweet_event_with_mocked_sentiment_analysis(self):
+        """Test tweet handler with mocked sentiment analysis using tsunami warning data."""
+        tweet_data = {
+            "data_source": {
+                "name": "Twitter", 
+                "author_name": "realDonaldTrump", 
+                "author_id": "25073877"
+            }, 
+            "createdAt": 1753841779, 
+            "text": "Due to a massive earthquake that occurred in the Pacific Ocean, a Tsunami Warning is in effect for those living in Hawaii. A Tsunami Watch is in effect for Alaska and the Pacific Coast of the United States. Japan is also in the way. Please visit https://t.co/V5RZFDxYzl for the latest information. STAY STRONG AND STAY SAFE!", 
+            "media": [], 
+            "links": ["https://tsunami.gov/"]
+        }
+        
+        with patch('src.handlers.tweet.analyze_tweet_sentiment', new_callable=AsyncMock) as mock_sentiment:
+            mock_sentiment.return_value = NoTokenFound()
+            
+            result = handle_tweet_event(tweet_data)
+            
+            # Verify sentiment analysis was called with the transformed data
+            mock_sentiment.assert_called_once()
+            called_tweet_output = mock_sentiment.call_args[0][0]
+            
+            # Check that the tweet output passed to sentiment analysis has correct structure
+            assert isinstance(called_tweet_output, TweetOutput)
+            assert called_tweet_output.data_source.name == "Twitter"
+            assert called_tweet_output.data_source.author_name == "realDonaldTrump"
+            assert called_tweet_output.data_source.author_id == "25073877"
+            assert called_tweet_output.createdAt == 1753841779
+            assert "Tsunami Warning" in called_tweet_output.text
+            assert called_tweet_output.media == []
+            assert called_tweet_output.links == ["https://tsunami.gov/"]
+            
+            # Verify the final result includes sentiment analysis
+            assert result.createdAt == 1753841779
+            assert result.data_source.author_name == "realDonaldTrump"
+            assert result.data_source.author_id == "25073877"
+            assert "Tsunami Warning" in result.text
+            assert result.media == []
+            assert result.links == ["https://tsunami.gov/"]
+            assert isinstance(result.sentiment_analysis, NoTokenFound)
