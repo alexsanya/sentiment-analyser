@@ -206,8 +206,8 @@ class TestMQSubscriberPublish:
         mock_connection.return_value = mock_conn
         
         messenger = MQSubscriber()
-        messenger._connection = mock_conn
-        messenger._channel = mock_channel
+        messenger._publisher_connection = mock_conn
+        messenger._publisher_channel = mock_channel
         
         test_message = {"text": "test tweet", "timestamp": 1234567890}
         result = messenger.publish(test_message)
@@ -331,7 +331,7 @@ class TestMQSubscriberPublish:
         # Message with invalid field that can't be coerced (missing required structure)
         invalid_message = {"createdAt": "not_a_number"}  # This should fail int conversion
         
-        with pytest.raises(ValueError, match="Message does not match expected schema"):
+        with pytest.raises(ValueError, match="Message does not match TweetOutput schema"):
             messenger.publish(invalid_message)
     
     @patch("pika.BlockingConnection")
@@ -480,8 +480,8 @@ class TestMQSubscriberBufferIntegration:
         
         mock_buffer = Mock()
         messenger = MQSubscriber(message_buffer=mock_buffer)
-        messenger._connection = mock_conn
-        messenger._channel = mock_channel
+        messenger._publisher_connection = mock_conn
+        messenger._publisher_channel = mock_channel
         
         test_message = {"text": "test tweet", "timestamp": 1234567890}
         result = messenger.publish(test_message)

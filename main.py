@@ -8,7 +8,7 @@ from src.config.logging_config import setup_logging, get_logger
 from src.config.logfire_config import initialize_logfire
 from src.core.mq_subscriber import MQSubscriber
 from src.core.rabbitmq_monitor import RabbitMQConnectionMonitor
-from src.handlers.tweet import handle_tweet_event
+from src.handlers import create_message_handler
 
 # Initialize module-level logger
 setup_logging()  # Auto-detects environment
@@ -56,50 +56,6 @@ def initialize_rabbitmq_monitor(mq_subscriber: MQSubscriber) -> Optional[RabbitM
         logger.info("RabbitMQ connection monitoring disabled")
         return None
 
-def message_handler(channel, method, properties, body):
-    """Simple message handler that logs incoming messages."""
-    try:
-        message = body.decode('utf-8')
-        logger.info(
-            "Received message from RabbitMQ",
-            routing_key=method.routing_key,
-            exchange=method.exchange,
-            message_size=len(message),
-            message_preview=message[:200] + "..." if len(message) > 200 else message
-        )
-
-        try:
-            # Parse JSON message to dictionary
-            tweet_data = json.loads(message)
-        except json.JSONDecodeError as e:
-            logger.error(
-                "Invalid JSON message received",
-                error=str(e),
-                message=message[:500] + "..." if len(message) > 500 else message
-            )
-            channel.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
-            return
-            
-        try:
-            # Analyze the tweet sentiment
-            tweet_output = handle_tweet_event(tweet_data)  
-            channel.basic_ack(delivery_tag=method.delivery_tag)
-        except Exception as e:
-            logger.error(
-                "Error analyzing tweet sentiment",
-                error=str(e),
-                message=message[:500] + "..." if len(message) > 500 else message
-            )
-            channel.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
-        
-    except Exception as e:
-        logger.error(
-            "Error processing message",
-            error=str(e),
-            routing_key=method.routing_key
-        )
-        # Reject the message without requeue to avoid infinite loops
-        channel.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
 
 def shutdown_handler(signum: int, frame: Any) -> None:
     """Handle shutdown signals gracefully."""
@@ -126,8 +82,11 @@ def main() -> None:
     logger.info("Signal handlers registered for graceful shutdown")
     
     try:
+        # Create message handler with MQSubscriber dependency injected
+        handler = create_message_handler(mq_subscriber)
+        
         # Set up message handler and start consuming
-        mq_subscriber.set_message_handler(message_handler)
+        mq_subscriber.set_message_handler(handler)
         mq_subscriber.start_consuming()
         
         logger.info("Application started and consuming messages. Press Ctrl+C to shutdown.")

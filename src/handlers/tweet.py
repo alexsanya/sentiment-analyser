@@ -1,13 +1,14 @@
 """Handler for tweet message processing."""
 
 import asyncio
-from typing import Dict, Any, List, Awaitable, Union
+from typing import Dict, Any, List, Awaitable, Union, Tuple
 from ..config.logging_config import get_logger
 from ..core.transformation import map_tweet_data
 from ..core.sentiment_analyzer import (
     TextSearchAgent, 
     ImageSearchAgent, 
     FirecrawlAgent,
+    AgentType,
     merge_agent_results,
     get_sentiment_config
 )
@@ -37,24 +38,24 @@ async def analyze_tweet_sentiment(tweet_output: TweetOutput) -> SentimentAnalysi
         image_agent = ImageSearchAgent(model_name=model_name)
         firecrawl_agent = FirecrawlAgent(model_name=model_name, firecrawl_url=firecrawl_url)
         
-        # Prepare tasks for concurrent execution
-        tasks = []
+        # Prepare tasks for concurrent execution with agent type tracking
+        tasks: List[Tuple[AgentType, Awaitable[SentimentAnalysisResult]]] = []
         
         # Text analysis task
         if tweet_output.text.strip():
-            tasks.append(text_agent.run(tweet_output.text))
+            tasks.append((AgentType.TEXT, text_agent.run(tweet_output.text)))
             logger.debug("Added text analysis task", text_length=len(tweet_output.text))
         
         # Image analysis tasks (one per media URL)
         for media_url in tweet_output.media:
             if media_url.strip():
-                tasks.append(image_agent.run(media_url))
+                tasks.append((AgentType.IMAGE, image_agent.run(media_url)))
                 logger.debug("Added image analysis task", media_url=media_url)
         
         # URL analysis tasks (one per link)
         for link_url in tweet_output.links:
             if link_url.strip():
-                tasks.append(firecrawl_agent.run(link_url))
+                tasks.append((AgentType.FIRECRAWL, firecrawl_agent.run(link_url)))
                 logger.debug("Added URL analysis task", link_url=link_url)
         
         if not tasks:
@@ -64,22 +65,25 @@ async def analyze_tweet_sentiment(tweet_output: TweetOutput) -> SentimentAnalysi
         # Execute all tasks concurrently with semaphore for concurrency control
         semaphore = asyncio.Semaphore(max_concurrent)
         
-        async def run_with_semaphore(task: Awaitable[SentimentAnalysisResult]) -> SentimentAnalysisResult:
+        async def run_with_semaphore(agent_type: AgentType, task: Awaitable[SentimentAnalysisResult]) -> Tuple[AgentType, SentimentAnalysisResult]:
             async with semaphore:
-                return await task
+                result = await task
+                return (agent_type, result)
         
         # Run all tasks and gather results
         logger.info("Starting sentiment analysis", task_count=len(tasks))
-        results = await asyncio.gather(*[run_with_semaphore(task) for task in tasks], return_exceptions=True)
+        results = await asyncio.gather(*[run_with_semaphore(agent_type, task) for agent_type, task in tasks], return_exceptions=True)
         
-        # Filter out exceptions and convert to analysis results
-        valid_results: List[SentimentAnalysisResult] = []
+        # Filter out exceptions and convert to analysis results with agent types
+        valid_results: List[Tuple[AgentType, SentimentAnalysisResult]] = []
         for i, result in enumerate(results):
             if isinstance(result, Exception):
-                logger.error("Agent task failed", task_index=i, error=str(result))
-                valid_results.append(NoTokenFound())
+                # Get the agent type from the original task for error logging
+                agent_type = tasks[i][0]
+                logger.error("Agent task failed", task_index=i, agent_type=agent_type.value, error=str(result))
+                valid_results.append((agent_type, NoTokenFound()))
             else:
-                # result is guaranteed to be SentimentAnalysisResult here
+                # result is guaranteed to be Tuple[AgentType, SentimentAnalysisResult] here
                 valid_results.append(result)  # type: ignore[arg-type]
         
         # Merge results
