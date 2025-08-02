@@ -24,6 +24,19 @@ class RelseaseAnnouncementWithoutDetails(BaseModel):
     pass
 
 
+class SnipeActionParams(BaseModel):
+    """Parameters for snipe action"""
+    chain_id: Optional[int] = Field(None, description="Blockchain chain ID")
+    chain_name: Optional[str] = Field(None, description="Blockchain name")
+    token_address: str = Field(..., description="Token contract address")
+
+
+class SnipeAction(BaseModel):
+    """Action message for sniping newly detected tokens"""
+    action: str = Field("snipe", description="Action type")
+    params: SnipeActionParams = Field(..., description="Snipe action parameters")
+
+
 # Type alias for sentiment analysis results
 SentimentAnalysisResult = Union[TokenDetails, NoTokenFound, RelseaseAnnouncementWithoutDetails]
 

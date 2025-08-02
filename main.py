@@ -9,12 +9,14 @@ from src.config.logfire_config import initialize_logfire
 from src.core.mq_subscriber import MQSubscriber
 from src.core.rabbitmq_monitor import RabbitMQConnectionMonitor
 from src.handlers.tweet import handle_tweet_event
+from src.models.schemas import TokenDetails, SnipeAction, SnipeActionParams
 
 # Initialize module-level logger
 setup_logging()  # Auto-detects environment
 logger = get_logger(__name__)
-# Global shutdown flag
+# Global shutdown flag and MQSubscriber reference
 shutdown_requested = False
+mq_subscriber: Optional[MQSubscriber] = None
 
 
 def initialize_rabbitmq() -> MQSubscriber:
@@ -57,7 +59,7 @@ def initialize_rabbitmq_monitor(mq_subscriber: MQSubscriber) -> Optional[RabbitM
         return None
 
 def message_handler(channel, method, properties, body):
-    """Simple message handler that logs incoming messages."""
+    """Message handler that processes tweets and publishes snipe actions for token detections."""
     try:
         message = body.decode('utf-8')
         logger.info(
@@ -82,8 +84,53 @@ def message_handler(channel, method, properties, body):
             
         try:
             # Analyze the tweet sentiment
-            tweet_output = handle_tweet_event(tweet_data)  
+            tweet_output = handle_tweet_event(tweet_data)
+            
+            # Check if sentiment analysis detected token details
+            if (tweet_output.sentiment_analysis and 
+                isinstance(tweet_output.sentiment_analysis, TokenDetails)):
+                
+                token_details = tweet_output.sentiment_analysis
+                
+                # Create snipe action message
+                snipe_params = SnipeActionParams(
+                    chain_id=token_details.chain_id,
+                    chain_name=token_details.chain_name,
+                    token_address=token_details.token_address
+                )
+                snipe_action = SnipeAction(params=snipe_params)
+                
+                # Get actions queue name from environment
+                actions_queue = os.getenv("ACTIONS_QUEUE_NAME", "actions_to_take")
+                
+                # Publish snipe action to actions queue
+                # We need access to mq_subscriber here, so we'll pass it as a global
+                global mq_subscriber
+                try:
+                    if mq_subscriber.publish(snipe_action, queue_name=actions_queue):
+                        logger.info(
+                            "Snipe action published successfully",
+                            token_address=token_details.token_address,
+                            chain_id=token_details.chain_id,
+                            chain_name=token_details.chain_name,
+                            actions_queue=actions_queue
+                        )
+                    else:
+                        logger.warning(
+                            "Failed to publish snipe action",
+                            token_address=token_details.token_address,
+                            actions_queue=actions_queue
+                        )
+                except Exception as publish_error:
+                    logger.error(
+                        "Error publishing snipe action",
+                        error=str(publish_error),
+                        token_address=token_details.token_address,
+                        actions_queue=actions_queue
+                    )
+            
             channel.basic_ack(delivery_tag=method.delivery_tag)
+            
         except Exception as e:
             logger.error(
                 "Error analyzing tweet sentiment",
@@ -109,7 +156,7 @@ def shutdown_handler(signum: int, frame: Any) -> None:
 
 def main() -> None:
     """Main application entry point."""
-    global shutdown_requested
+    global shutdown_requested, mq_subscriber
     
     environment = os.getenv("ENVIRONMENT", "development")
     logger.info("Starting RabbitMQ message processor", environment=environment)

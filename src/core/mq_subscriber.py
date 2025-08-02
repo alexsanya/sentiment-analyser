@@ -13,7 +13,7 @@ from pika.spec import Basic, BasicProperties
 from pydantic import ValidationError
 from ..config.logging_config import get_logger
 from .message_buffer import MessageBuffer
-from ..models.schemas import TweetOutput
+from ..models.schemas import TweetOutput, SnipeAction
 
 logger = get_logger(__name__)
 
@@ -261,11 +261,12 @@ class MQSubscriber:
             self._consumer_channel = self._consumer_connection.channel()
             self._consumer_channel.queue_declare(queue=self.consume_queue, durable=True)
     
-    def publish(self, message: Union[Dict[str, Any], TweetOutput]) -> bool:
+    def publish(self, message: Union[Dict[str, Any], TweetOutput, SnipeAction], queue_name: Optional[str] = None) -> bool:
         """Publish JSON message to RabbitMQ queue with automatic buffering on failure.
         
         Args:
-            message: Dictionary or TweetOutput object to be serialized as JSON and published
+            message: Dictionary, TweetOutput, or SnipeAction object to be serialized as JSON and published
+            queue_name: Optional queue name to publish to (defaults to self.queue_name)
             
         Returns:
             bool: True if message was published successfully, False otherwise
@@ -273,24 +274,29 @@ class MQSubscriber:
         Raises:
             ValueError: If message is invalid or too large
         """
+        # Determine target queue
+        target_queue = queue_name or self.queue_name
+        
         # Input validation and type conversion
-        if isinstance(message, TweetOutput):
-            # Convert TweetOutput to dictionary
+        if isinstance(message, (TweetOutput, SnipeAction)):
+            # Convert Pydantic model to dictionary
             message = message.model_dump()
         elif isinstance(message, dict):
             # Check for empty dictionary first
             if not message:
                 raise ValueError("Message cannot be empty")
             
-            # Validate dictionary against TweetOutput schema
-            try:
-                validated_message = TweetOutput(**message)
-                # Convert back to dict for JSON serialization
-                message = validated_message.model_dump()
-            except ValidationError as e:
-                raise ValueError(f"Message does not match expected schema: {str(e)}")
+            # For dictionary messages, try to validate against known schemas
+            # If no queue_name specified, assume TweetOutput for backward compatibility
+            if not queue_name:
+                try:
+                    validated_message = TweetOutput(**message)
+                    # Convert back to dict for JSON serialization
+                    message = validated_message.model_dump()
+                except ValidationError as e:
+                    raise ValueError(f"Message does not match TweetOutput schema: {str(e)}")
         else:
-            raise ValueError("Message must be a dictionary or TweetOutput object")
+            raise ValueError("Message must be a dictionary, TweetOutput, or SnipeAction object")
         
         # Final check for empty message after processing
         if not message:
@@ -314,10 +320,14 @@ class MQSubscriber:
             if self._publisher_channel is None:
                 raise RuntimeError("Publisher channel is not available after connection check")
             
+            # Declare target queue as durable for persistence (only if different from default)
+            if target_queue != self.queue_name:
+                self._publisher_channel.queue_declare(queue=target_queue, durable=True)
+            
             # Publish message with persistence
             self._publisher_channel.basic_publish(
                 exchange='',
-                routing_key=self.queue_name,
+                routing_key=target_queue,
                 body=json_message,
                 properties=pika.BasicProperties(
                     delivery_mode=2,  # Make message persistent
@@ -326,7 +336,7 @@ class MQSubscriber:
             
             logger.info(
                 "Message published to RabbitMQ",
-                queue_name=self.queue_name,
+                queue_name=target_queue,
                 message_size=len(json_message)
             )
             return True
@@ -337,7 +347,7 @@ class MQSubscriber:
                 logger.error(
                     "Pika buffer underflow detected - this indicates a thread safety issue",
                     error=str(e),
-                    queue_name=self.queue_name,
+                    queue_name=target_queue,
                     message_size=len(str(message)),
                     error_type="pika_buffer_underflow"
                 )
@@ -347,7 +357,7 @@ class MQSubscriber:
                 logger.error(
                     "Failed to publish message to RabbitMQ, attempting to buffer",
                     error=str(e),
-                    queue_name=self.queue_name,
+                    queue_name=target_queue,
                     message_size=len(str(message))
                 )
             

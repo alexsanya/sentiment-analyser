@@ -155,12 +155,12 @@ docker-compose down -v
 
 **AI-powered sentiment analysis architecture** for cryptocurrency token detection:
 
-- **Main Application** (`main.py`): Application orchestration and message consumption coordination
+- **Main Application** (`main.py`): Application orchestration, message consumption coordination, and automatic snipe action publishing for detected tokens
 - **Sentiment Analyzer** (`src/core/sentiment_analyzer.py`): Main sentiment analysis orchestration with agent coordination
 - **AI Agents** (`src/core/agents/` package): PydanticAI-powered agents for text, image, and web content analysis
 - **MQ Subscriber** (`src/core/mq_subscriber.py`): RabbitMQ message consumption and publishing service with schema validation and automatic buffering
 - **Data Transformation** (`src/core/transformation.py`): Tweet data standardization and format conversion pipeline
-- **Schema Validation** (`src/models/schemas.py`): Pydantic models for data validation, token details, and sentiment analysis results
+- **Schema Validation** (`src/models/schemas.py`): Pydantic models for data validation, token details, sentiment analysis results, and snipe action messages
 - **RabbitMQ Monitor** (`src/core/rabbitmq_monitor.py`): Automatic connection monitoring with health checks and reconnection logic
 - **Message Handlers** (`src/handlers/` package): Modular message processing with sentiment analysis integration
 - **Address Validators** (`src/core/utils/` package): Blockchain address validation utilities for Solana and EVM chains
@@ -267,6 +267,7 @@ The MQSubscriber supports both consumption and publishing via environment variab
 - **`RABBITMQ_PORT`**: RabbitMQ server port (default: "5672")
 - **`RABBITMQ_QUEUE`**: Default queue name for publishing (default: "tweet_events")
 - **`RABBITMQ_CONSUME_QUEUE`**: Queue name for consumption (defaults to RABBITMQ_QUEUE)
+- **`ACTIONS_QUEUE_NAME`**: Queue name for publishing snipe actions when tokens are detected (default: "actions_to_take")
 - **`RABBITMQ_USERNAME`**: Optional username for authentication
 - **`RABBITMQ_PASSWORD`**: Optional password for authentication
 
@@ -277,6 +278,7 @@ RABBITMQ_HOST=localhost
 RABBITMQ_PORT=5672
 RABBITMQ_QUEUE=tweet_events
 RABBITMQ_CONSUME_QUEUE=incoming_messages
+ACTIONS_QUEUE_NAME=actions_to_take
 RABBITMQ_USERNAME=admin
 RABBITMQ_PASSWORD=changeme
 
@@ -456,7 +458,8 @@ docker-compose down
 - **Schema Validation** (`src/models/schemas.py`): Pydantic models ensuring data consistency, type safety, and token analysis results
 - **Message Buffer** (`src/core/message_buffer.py`): Thread-safe FIFO buffer system for storing messages during RabbitMQ outages
 - **Message Processing** (`src/handlers/` package): Modular message processing with sentiment analysis integration
-- **Message Logging** (`main.py`): Simple message handler that logs all incoming messages with metadata
+- **Snipe Action Publishing** (`main.py`): Automatic detection of token announcements and publishing of snipe actions to `actions_to_take` queue
+- **Message Logging** (`main.py`): Message handler that logs all incoming messages with metadata and processes token detections
 - **Structured Logging**: JSON-formatted logs separated by level (error.log, warning.log, app.log)
 - **Graceful Shutdown**: Signal handling with proper RabbitMQ connection and consumer cleanup
 
