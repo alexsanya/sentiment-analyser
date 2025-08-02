@@ -82,6 +82,9 @@ uv run pytest tests/test_tweet_handler.py
 # Run tweet handler tests with coverage
 uv run pytest tests/test_tweet_handler.py --cov=src.handlers.tweet --cov-report=term-missing
 
+# Test message handler functionality (requires mocking)
+# Note: Message handler tests are included in integration testing
+
 # Sentiment Analysis and Agent Tests
 
 # Run all sentiment analysis tests
@@ -155,14 +158,14 @@ docker-compose down -v
 
 **AI-powered sentiment analysis architecture** for cryptocurrency token detection:
 
-- **Main Application** (`main.py`): Application orchestration, message consumption coordination, and automatic snipe action publishing for detected tokens
+- **Main Application** (`main.py`): Application orchestration and message consumption coordination with clean separation of concerns
 - **Sentiment Analyzer** (`src/core/sentiment_analyzer.py`): Main sentiment analysis orchestration with agent coordination
 - **AI Agents** (`src/core/agents/` package): PydanticAI-powered agents for text, image, and web content analysis
 - **MQ Subscriber** (`src/core/mq_subscriber.py`): RabbitMQ message consumption and publishing service with schema validation and automatic buffering
 - **Data Transformation** (`src/core/transformation.py`): Tweet data standardization and format conversion pipeline
 - **Schema Validation** (`src/models/schemas.py`): Pydantic models for data validation, token details, sentiment analysis results, and snipe action messages
 - **RabbitMQ Monitor** (`src/core/rabbitmq_monitor.py`): Automatic connection monitoring with health checks and reconnection logic
-- **Message Handlers** (`src/handlers/` package): Modular message processing with sentiment analysis integration
+- **Message Handlers** (`src/handlers/` package): Modular message processing with sentiment analysis integration and snipe action publishing
 - **Address Validators** (`src/core/utils/` package): Blockchain address validation utilities for Solana and EVM chains
 - **Configuration Management** (`src/config/` package): Structured logging, Logfire observability, and sentiment analysis configuration
 
@@ -181,8 +184,9 @@ docker-compose down -v
 
 **Message Handlers** (process incoming message content):
 - `src/handlers/tweet.py`: Tweet message processing with transformation pipeline, data validation, and sentiment analysis integration
+- `src/handlers/message_handler.py`: RabbitMQ message handler factory with dependency injection and snipe action publishing
 
-**Handler Package** (`src/handlers/__init__.py`): Centralized exports for message handlers
+**Handler Package** (`src/handlers/__init__.py`): Centralized exports for message handlers and factory functions
 
 ### File Structure
 ```
@@ -211,7 +215,8 @@ docker-compose down -v
 │   │   └── rabbitmq_monitor.py # RabbitMQ connection monitoring with automatic reconnection
 │   ├── handlers/             # Message handlers package
 │   │   ├── __init__.py      # Package exports
-│   │   └── tweet.py         # Tweet message handler with transformation and sentiment analysis
+│   │   ├── tweet.py         # Tweet message handler with transformation and sentiment analysis
+│   │   └── message_handler.py # RabbitMQ message handler factory with snipe action publishing
 │   └── models/               # Data models and schemas
 │       ├── __init__.py      # Package exports
 │       └── schemas.py       # Pydantic models for data validation, token details, and sentiment analysis
@@ -457,11 +462,47 @@ docker-compose down
 - **Data Transformation** (`src/core/transformation.py`): Tweet data standardization with datetime parsing and URL extraction
 - **Schema Validation** (`src/models/schemas.py`): Pydantic models ensuring data consistency, type safety, and token analysis results
 - **Message Buffer** (`src/core/message_buffer.py`): Thread-safe FIFO buffer system for storing messages during RabbitMQ outages
-- **Message Processing** (`src/handlers/` package): Modular message processing with sentiment analysis integration
-- **Snipe Action Publishing** (`main.py`): Automatic detection of token announcements and publishing of snipe actions to `actions_to_take` queue
-- **Message Logging** (`main.py`): Message handler that logs all incoming messages with metadata and processes token detections
+- **Message Processing** (`src/handlers/` package): Modular message processing with sentiment analysis integration and dependency injection
+- **Snipe Action Publishing** (`src/handlers/message_handler.py`): Automatic detection of token announcements and publishing of snipe actions to `actions_to_take` queue
+- **Message Handler Factory** (`src/handlers/message_handler.py`): Clean dependency injection pattern using `create_message_handler()` for RabbitMQ message processing
 - **Structured Logging**: JSON-formatted logs separated by level (error.log, warning.log, app.log)
 - **Graceful Shutdown**: Signal handling with proper RabbitMQ connection and consumer cleanup
+
+## Snipe Action System
+
+The application automatically publishes **snipe actions** when AI agents detect cryptocurrency token announcements, enabling downstream services to act on newly discovered tokens.
+
+### Snipe Action Workflow
+
+1. **Tweet Processing**: Incoming tweets are processed through sentiment analysis
+2. **Token Detection**: AI agents analyze content and return `TokenDetails` if a token is found
+3. **Automatic Publishing**: When `TokenDetails` is detected, a `SnipeAction` is automatically created and published to the `actions_to_take` queue
+4. **Message Structure**: Published messages follow a standardized format for downstream consumption
+
+### Snipe Action Message Format
+
+```json
+{
+  "action": "snipe",
+  "params": {
+    "chain_id": 1,
+    "chain_name": "Ethereum",
+    "token_address": "0x742d35Cc6765C0532575f5A2c0a078Df8a2D4e5e"
+  }
+}
+```
+
+### Configuration
+
+- **`ACTIONS_QUEUE_NAME`**: Queue name for publishing snipe actions (default: `"actions_to_take"`)
+- **Automatic Detection**: No manual configuration required - happens automatically when tokens are detected
+- **Error Handling**: Comprehensive error handling with logging for failed publishes
+
+### Integration
+
+- **Next Service Integration**: Downstream services can consume from `actions_to_take` queue
+- **Message Validation**: All snipe actions are validated using Pydantic schemas
+- **Buffering Support**: Failed publishes are automatically buffered during RabbitMQ outages
 
 ## AI Agent System
 
@@ -789,7 +830,7 @@ uv run pytest test_websocket_manager.py --cov=src.core.websocket_manager --cov-r
 - **RabbitMQ Monitor Coverage**: Comprehensive test coverage with 23 test cases covering all monitor functionality
 - **Transformation Coverage**: Complete pipeline testing with 27 test cases covering data transformation, schema validation, and integration
 - **Message Buffer Coverage**: 27 test cases covering thread safety, FIFO operations, and RabbitMQ failure handling
-- **Tested Components**: Sentiment analysis orchestration, AI agent coordination, blockchain address validation, message processing with token detection, RabbitMQ connection monitoring, data transformation pipeline, schema validation, and tweet handler operations with AI integration
+- **Tested Components**: Sentiment analysis orchestration, AI agent coordination, blockchain address validation, message processing with token detection, RabbitMQ connection monitoring, data transformation pipeline, schema validation, tweet handler operations with AI integration, and message handler factory with dependency injection
 - **Connection Management Tests** (8 tests): Connection lifecycle, retry logic, error handling, shutdown coordination
   - Successful WebSocket connection establishment
   - Connection retry logic with 5-second delays  
@@ -904,12 +945,13 @@ uv run pytest test_websocket_manager.py --cov=src.core.websocket_manager --cov-r
 - **Clean Shutdown**: Proper consumer cancellation and thread termination
 
 ### Handler Development
-- **Sentiment Integration**: Handlers integrate AI-powered sentiment analysis for token detection
-- **Simple Processing**: Handlers focus on data transformation, processing logic, and sentiment coordination
-- **No Dependencies**: Tweet handler no longer requires MQSubscriber injection
+- **Factory Pattern**: Message handlers use factory functions with dependency injection for clean architecture
+- **Separation of Concerns**: Tweet processing logic separated from RabbitMQ message handling
+- **Dependency Injection**: MQSubscriber and other dependencies passed explicitly via closures
+- **Modular Design**: Handlers organized in dedicated package with clear responsibilities
+- **No Global State**: Eliminated global variables using closure-based dependency capture
 - **Pure Functions**: Handlers are stateless and testable with consistent sentiment analysis integration
-- **Consistent Interface**: All handlers follow established patterns for logging, error handling, and AI agent coordination
-- **Individual Testing**: Each handler can be tested independently with mocked AI agents
+- **Individual Testing**: Each handler can be tested independently with mocked dependencies
 
 ### Agent Development
 - **PydanticAI Integration**: All agents built on PydanticAI framework for structured AI interactions
@@ -926,6 +968,20 @@ uv run pytest test_websocket_manager.py --cov=src.core.websocket_manager --cov-r
 - **Authentication**: Optional username/password authentication support
 - **AI Configuration**: OpenAI API keys, model selection, and agent retry settings
 - **Blockchain Configuration**: Chain ID mapping and address validation patterns
+
+### Architectural Benefits
+
+The application demonstrates several architectural best practices:
+
+- **Clean Architecture**: Separation of concerns with dedicated modules for specific responsibilities
+- **Dependency Injection**: Factory pattern eliminates global variables and improves testability
+- **Modular Design**: Handlers, agents, and core components are organized in logical packages
+- **No Global State**: Closure-based dependency capture avoids global variable usage
+- **Factory Pattern**: Message handlers use dependency injection for clean, testable code
+- **Automatic Token Detection**: Seamless integration between AI analysis and action publishing
+- **Message-Driven Architecture**: Asynchronous processing with RabbitMQ message queues
+- **Fault Tolerance**: Built-in buffering, reconnection, and error handling mechanisms
+- **Observability**: Comprehensive logging and tracing throughout the system
 
 ### Monitoring & Observability
 - **Structured Logging**: All events and errors logged with contextual metadata
