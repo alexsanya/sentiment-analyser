@@ -2,7 +2,7 @@
 
 import os
 import logfire
-from typing import Optional
+from typing import Optional, Any
 from ..config.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -55,7 +55,7 @@ def initialize_logfire() -> None:
         # Don't raise - let the application continue without observability
 
 
-def create_logfire_span(operation: str, **kwargs) -> Optional[logfire.LogfireSpan]:
+def create_logfire_span(operation: str, **kwargs: Any) -> Optional[logfire.LogfireSpan]:
     """
     Create a Logfire span for tracking operations.
     
@@ -79,7 +79,7 @@ def log_agent_metrics(
     input_size: int,
     result_type: str,
     success: bool,
-    **additional_attributes
+    **additional_attributes: Any
 ) -> None:
     """
     Log agent execution metrics to Logfire.

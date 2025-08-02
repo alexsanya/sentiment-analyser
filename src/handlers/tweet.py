@@ -1,7 +1,7 @@
 """Handler for tweet message processing."""
 
 import asyncio
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Awaitable, Union
 from ..config.logging_config import get_logger
 from ..core.transformation import map_tweet_data
 from ..core.sentiment_analyzer import (
@@ -64,7 +64,7 @@ async def analyze_tweet_sentiment(tweet_output: TweetOutput) -> SentimentAnalysi
         # Execute all tasks concurrently with semaphore for concurrency control
         semaphore = asyncio.Semaphore(max_concurrent)
         
-        async def run_with_semaphore(task):
+        async def run_with_semaphore(task: Awaitable[SentimentAnalysisResult]) -> SentimentAnalysisResult:
             async with semaphore:
                 return await task
         
@@ -73,13 +73,14 @@ async def analyze_tweet_sentiment(tweet_output: TweetOutput) -> SentimentAnalysi
         results = await asyncio.gather(*[run_with_semaphore(task) for task in tasks], return_exceptions=True)
         
         # Filter out exceptions and convert to analysis results
-        valid_results = []
+        valid_results: List[SentimentAnalysisResult] = []
         for i, result in enumerate(results):
             if isinstance(result, Exception):
                 logger.error("Agent task failed", task_index=i, error=str(result))
                 valid_results.append(NoTokenFound())
             else:
-                valid_results.append(result)
+                # result is guaranteed to be SentimentAnalysisResult here
+                valid_results.append(result)  # type: ignore[arg-type]
         
         # Merge results
         merged_result = merge_agent_results(valid_results)

@@ -1,6 +1,7 @@
 """Text search agent for token detection in text content."""
 
 import time
+from typing import cast
 from pydantic_ai import Agent
 
 from ...models.schemas import SentimentAnalysisResult, NoTokenFound
@@ -23,9 +24,9 @@ class TextSearchAgent:
         Args:
             model_name: The LLM model to use (default: gpt-4o)
         """
-        self.agent = Agent[None, SentimentAnalysisResult](
+        self.agent = Agent[None, SentimentAnalysisResult](  # type: ignore[call-overload]
             model=model_name,
-            output_type=SentimentAnalysisResult,
+            result_type=SentimentAnalysisResult,
             retries=DEFAULT_AGENT_RETRIES,
             system_prompt=TEXT_SEARCH_PROMPT
         )
@@ -75,7 +76,7 @@ class TextSearchAgent:
                 execution_time=execution_time,
                 result_type=result_type
             )
-            return result.output
+            return cast(SentimentAnalysisResult, result.output)
             
         except Exception as e:
             execution_time = time.time() - start_time

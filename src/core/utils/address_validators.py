@@ -2,9 +2,10 @@
 
 import re
 import base58
+from typing import Any
 
 
-def is_valid_solana_address(address: str) -> bool:
+def is_valid_solana_address(address: Any) -> bool:
     """
     Verify if a string is a valid Solana address (token or otherwise).
     
@@ -40,7 +41,7 @@ def is_valid_solana_address(address: str) -> bool:
         return False
 
 
-def is_valid_evm_address(address: str) -> bool:
+def is_valid_evm_address(address: Any) -> bool:
     """
     Validates if the given address is a valid EVM blockchain address.
     

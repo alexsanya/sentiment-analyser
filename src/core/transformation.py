@@ -12,7 +12,7 @@ from typing import Dict, Any, List, Union, Optional
 from urllib.parse import urlparse
 from ..models.schemas import TweetOutput, DataSource
 
-def extract_url(text: str) -> str:
+def extract_url(text: Any) -> str:
     """Extract URL from markdown-style links with security validation.
     
     Args:
@@ -92,7 +92,7 @@ def validate_url_security(url: str) -> bool:
     return True
 
 
-def sanitize_url_list(urls: List[str]) -> List[str]:
+def sanitize_url_list(urls: Any) -> List[str]:
     """Sanitize a list of URLs by filtering out potentially malicious ones.
     
     Args:
@@ -136,7 +136,7 @@ def parse_twitter_datetime(datetime_str: Union[str, None]) -> int:
         # Return 0 if parsing fails for any reason
         return 0
 
-def map_tweet_data(tweet: Dict[str, Any]) -> TweetOutput:
+def map_tweet_data(tweet: Any) -> TweetOutput:
     """Transform raw tweet data into standardized TweetOutput schema.
     
     Args:
@@ -232,14 +232,10 @@ def map_tweet_data(tweet: Dict[str, Any]) -> TweetOutput:
             if isinstance(author, dict):
                 author_name = author.get("userName", "")
                 author_id = author.get("id", "")
-        
-        # Ensure author fields are strings
-        if not isinstance(author_name, str):
-            author_name = ""
-        if not isinstance(author_id, str):
-            author_id = ""
     except (AttributeError, TypeError):
-        pass
+        # Reset to empty strings if any error occurs
+        author_name = ""
+        author_id = ""
 
     return TweetOutput(
         data_source=DataSource(
@@ -250,5 +246,6 @@ def map_tweet_data(tweet: Dict[str, Any]) -> TweetOutput:
         createdAt=createdAt,
         text=text,
         media=media,
-        links=links
+        links=links,
+        sentiment_analysis=None
     )

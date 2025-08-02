@@ -4,7 +4,7 @@ import os
 import time
 import threading
 from collections import deque
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, cast
 from ..config.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -47,7 +47,7 @@ class MessageBuffer:
         
         return cls(max_size=max_size, enabled=enabled)
     
-    def add_message(self, message: Dict[str, Any]) -> bool:
+    def add_message(self, message: Any) -> bool:
         """Add message to buffer with timestamp.
         
         When buffer is full, oldest message is automatically removed.
@@ -115,7 +115,7 @@ class MessageBuffer:
         """
         with self._lock:
             if self._buffer:
-                return self._buffer.popleft()
+                return cast(Dict[str, Any], self._buffer.popleft())
             return None
     
     def clear_buffer(self) -> int:
