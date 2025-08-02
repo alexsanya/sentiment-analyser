@@ -107,6 +107,8 @@ def setup_logging(environment: Optional[str] = None) -> structlog.stdlib.BoundLo
     # Configure root logger
     root_logger = logging.getLogger()
     root_logger.handlers.clear()
+    # Explicitly set root logger level to ensure all messages are processed
+    root_logger.setLevel(logging.DEBUG)
     for handler in handlers:
         root_logger.addHandler(handler)
     

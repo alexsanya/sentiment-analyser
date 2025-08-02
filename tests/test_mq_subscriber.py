@@ -223,7 +223,8 @@ class TestMQSubscriberPublish:
             "createdAt": 0,  # timestamp gets converted to createdAt and defaults to 0 if not provided
             "text": "test tweet", 
             "media": [], 
-            "links": []
+            "links": [],
+            "sentiment_analysis": None
         }
         assert json.loads(call_args[1]["body"]) == expected_message
         assert call_args[1]["properties"].delivery_mode == 2
@@ -510,7 +511,8 @@ class TestMQSubscriberBufferIntegration:
             "createdAt": 0,  # timestamp gets converted to createdAt and defaults to 0 if not provided
             "text": "test tweet", 
             "media": [], 
-            "links": []
+            "links": [],
+            "sentiment_analysis": None
         }
         mock_buffer.add_message.assert_called_once_with(expected_message)
     
@@ -534,7 +536,8 @@ class TestMQSubscriberBufferIntegration:
             "createdAt": 0,  # timestamp gets converted to createdAt and defaults to 0 if not provided
             "text": "test tweet", 
             "media": [], 
-            "links": []
+            "links": [],
+            "sentiment_analysis": None
         }
         mock_buffer.add_message.assert_called_once_with(expected_message)
     

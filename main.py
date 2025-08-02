@@ -1,16 +1,18 @@
+import json
 import os
 import signal
 import time
 from typing import Any, Optional
 from dotenv import load_dotenv
 from src.config.logging_config import setup_logging, get_logger
+from src.config.logfire_config import initialize_logfire
 from src.core.mq_subscriber import MQSubscriber
 from src.core.rabbitmq_monitor import RabbitMQConnectionMonitor
+from src.handlers.tweet import handle_tweet_event
 
 # Initialize module-level logger
 setup_logging()  # Auto-detects environment
 logger = get_logger(__name__)
-
 # Global shutdown flag
 shutdown_requested = False
 
@@ -65,9 +67,30 @@ def message_handler(channel, method, properties, body):
             message_size=len(message),
             message_preview=message[:200] + "..." if len(message) > 200 else message
         )
-        
-        # Acknowledge the message
-        channel.basic_ack(delivery_tag=method.delivery_tag)
+
+        try:
+            # Parse JSON message to dictionary
+            tweet_data = json.loads(message)
+        except json.JSONDecodeError as e:
+            logger.error(
+                "Invalid JSON message received",
+                error=str(e),
+                message=message[:500] + "..." if len(message) > 500 else message
+            )
+            channel.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+            return
+            
+        try:
+            # Analyze the tweet sentiment
+            tweet_output = handle_tweet_event(tweet_data)  
+            channel.basic_ack(delivery_tag=method.delivery_tag)
+        except Exception as e:
+            logger.error(
+                "Error analyzing tweet sentiment",
+                error=str(e),
+                message=message[:500] + "..." if len(message) > 500 else message
+            )
+            channel.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
         
     except Exception as e:
         logger.error(
@@ -127,4 +150,6 @@ def main() -> None:
 
 if __name__ == "__main__":
     load_dotenv()
+    # Initialize Logfire observability
+    initialize_logfire()
     main()

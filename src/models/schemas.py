@@ -4,6 +4,30 @@ from typing import List, Any, Optional, Union
 from pydantic import BaseModel, Field, field_validator
 
 
+class TokenDetails(BaseModel):
+    """Details of token/coin in blockchain"""
+    chain_id: Optional[int] = Field(None, description="Id of blockchain")
+    chain_name: Optional[str] = Field(None, description="Name of blockchain")
+    is_release: Optional[bool] = Field(None, description="Whether this is a token release announcement")
+    chain_defined_explicitly: Optional[bool] = Field(None, description="Whether name of blockchain been mentioned explicitly in text")
+    definition_fragment: Optional[str] = Field(None, description="A fragment of content where name of blockchain been mentioned explicitly")
+    token_address: str = Field(..., description="Address of token")
+
+
+class NoTokenFound(BaseModel):
+    """When no token details found"""
+    pass
+
+
+class RelseaseAnnouncementWithoutDetails(BaseModel):
+    """When no token details found but release is announced"""
+    pass
+
+
+# Type alias for sentiment analysis results
+SentimentAnalysisResult = Union[TokenDetails, NoTokenFound, RelseaseAnnouncementWithoutDetails]
+
+
 class DataSource(BaseModel):
     """Schema for data source"""
     name: str = Field("", description="Data source name")
@@ -17,6 +41,7 @@ class TweetOutput(BaseModel):
     text: str = Field("", description="Tweet text content")
     media: List[str] = Field(default_factory=list, description="Media URLs from tweet")
     links: List[str] = Field(default_factory=list, description="External links from tweet")
+    sentiment_analysis: Optional[SentimentAnalysisResult] = Field(None, description="Token sentiment analysis result")
     
     @field_validator('text', mode='before')
     @classmethod

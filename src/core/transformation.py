@@ -12,7 +12,7 @@ from typing import Dict, Any, List, Union, Optional
 from urllib.parse import urlparse
 from ..models.schemas import TweetOutput, DataSource
 
-def extract_url(text: str) -> str:
+def extract_url(text: Any) -> str:
     """Extract URL from markdown-style links with security validation.
     
     Args:
@@ -92,7 +92,7 @@ def validate_url_security(url: str) -> bool:
     return True
 
 
-def sanitize_url_list(urls: List[str]) -> List[str]:
+def sanitize_url_list(urls: Any) -> List[str]:
     """Sanitize a list of URLs by filtering out potentially malicious ones.
     
     Args:
@@ -136,7 +136,7 @@ def parse_twitter_datetime(datetime_str: Union[str, None]) -> int:
         # Return 0 if parsing fails for any reason
         return 0
 
-def map_tweet_data(tweet: Dict[str, Any]) -> TweetOutput:
+def map_tweet_data(tweet: Any) -> TweetOutput:
     """Transform raw tweet data into standardized TweetOutput schema.
     
     Args:
@@ -157,48 +157,63 @@ def map_tweet_data(tweet: Dict[str, Any]) -> TweetOutput:
         tweet = {}
     
     # Extract timestamp and convert to unix timestamp
-    created_at_str = tweet.get("createdAt", "")
-    createdAt = parse_twitter_datetime(created_at_str)
+    created_at_value = tweet.get("createdAt", "")
+    if isinstance(created_at_value, int):
+        # Already a timestamp
+        createdAt = created_at_value
+    else:
+        # Parse as Twitter datetime string
+        createdAt = parse_twitter_datetime(created_at_value)
 
     # Extract and validate text content
     text = tweet.get("text", "")
     if not isinstance(text, str):
         text = ""
 
-    # Extract media URLs from extendedEntities with error handling
+    # Extract media URLs - check if already provided or extract from extendedEntities
     media = []
     try:
-        extended_entities = tweet.get("extendedEntities", {})
-        if isinstance(extended_entities, dict):
-            media_entities = extended_entities.get("media", [])
-            if isinstance(media_entities, list):
-                raw_media = []
-                for item in media_entities:
-                    if isinstance(item, dict) and "media_url_https" in item:
-                        media_url = item["media_url_https"]
-                        if isinstance(media_url, str):
-                            raw_media.append(media_url)
-                # Apply security validation
-                media = sanitize_url_list(raw_media)
+        # Check if media array is already provided
+        if "media" in tweet and isinstance(tweet["media"], list):
+            media = sanitize_url_list(tweet["media"])
+        else:
+            # Fallback to extracting from extendedEntities
+            extended_entities = tweet.get("extendedEntities", {})
+            if isinstance(extended_entities, dict):
+                media_entities = extended_entities.get("media", [])
+                if isinstance(media_entities, list):
+                    raw_media = []
+                    for item in media_entities:
+                        if isinstance(item, dict) and "media_url_https" in item:
+                            media_url = item["media_url_https"]
+                            if isinstance(media_url, str):
+                                raw_media.append(media_url)
+                    # Apply security validation
+                    media = sanitize_url_list(raw_media)
     except (AttributeError, TypeError, KeyError):
         media = []
 
-    # Extract URLs from entities with error handling and security validation
+    # Extract URLs - check if already provided or extract from entities
     links = []
     try:
-        entities = tweet.get("entities", {})
-        if isinstance(entities, dict):
-            url_entities = entities.get("urls", [])
-            if isinstance(url_entities, list):
-                raw_links = []
-                for item in url_entities:
-                    if isinstance(item, dict) and "expanded_url" in item:
-                        expanded_url = item["expanded_url"]
-                        if isinstance(expanded_url, str):
-                            extracted_url = extract_url(expanded_url)
-                            raw_links.append(extracted_url)
-                # Apply security validation
-                links = sanitize_url_list(raw_links)
+        # Check if links array is already provided
+        if "links" in tweet and isinstance(tweet["links"], list):
+            links = sanitize_url_list(tweet["links"])
+        else:
+            # Fallback to extracting from entities
+            entities = tweet.get("entities", {})
+            if isinstance(entities, dict):
+                url_entities = entities.get("urls", [])
+                if isinstance(url_entities, list):
+                    raw_links = []
+                    for item in url_entities:
+                        if isinstance(item, dict) and "expanded_url" in item:
+                            expanded_url = item["expanded_url"]
+                            if isinstance(expanded_url, str):
+                                extracted_url = extract_url(expanded_url)
+                                raw_links.append(extracted_url)
+                    # Apply security validation
+                    links = sanitize_url_list(raw_links)
     except (AttributeError, TypeError, KeyError):
         links = []
 
@@ -206,17 +221,21 @@ def map_tweet_data(tweet: Dict[str, Any]) -> TweetOutput:
     author_name = ""
     author_id = ""
     try:
-        author = tweet.get("author", {})
-        if isinstance(author, dict):
-            author_name = author.get("userName", "")
-            author_id = author.get("id", "")
-            # Ensure author fields are strings
-            if not isinstance(author_name, str):
-                author_name = ""
-            if not isinstance(author_id, str):
-                author_id = ""
+        # Check if data_source format is already provided
+        data_source = tweet.get("data_source", {})
+        if isinstance(data_source, dict) and (data_source.get("author_name") or data_source.get("author_id")):
+            author_name = data_source.get("author_name", "")
+            author_id = data_source.get("author_id", "")
+        else:
+            # Fallback to original author format
+            author = tweet.get("author", {})
+            if isinstance(author, dict):
+                author_name = author.get("userName", "")
+                author_id = author.get("id", "")
     except (AttributeError, TypeError):
-        pass
+        # Reset to empty strings if any error occurs
+        author_name = ""
+        author_id = ""
 
     return TweetOutput(
         data_source=DataSource(
@@ -227,5 +246,6 @@ def map_tweet_data(tweet: Dict[str, Any]) -> TweetOutput:
         createdAt=createdAt,
         text=text,
         media=media,
-        links=links
+        links=links,
+        sentiment_analysis=None
     )

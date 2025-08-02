@@ -4,21 +4,27 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is the RabbitMQ message processor microservice, a component designed for consuming and processing messages from RabbitMQ queues. The application focuses on message consumption, processing, and logging, with support for publishing capabilities as well. It can be integrated into larger systems for real-time message processing and data transformation.
+This is an AI-powered sentiment analysis microservice for cryptocurrency token detection, built on RabbitMQ message processing architecture. The application specializes in analyzing tweets and social media content to detect new cryptocurrency token announcements using advanced AI agents. It combines message consumption, processing, and logging with sophisticated blockchain intelligence capabilities, featuring PydanticAI-powered agents for text analysis, image recognition, and web scraping. The service can be integrated into larger cryptocurrency monitoring and trading systems for real-time token discovery and market intelligence.
 
 ## Technology Stack
 
 - **Language**: Python 3.12
 - **Package Manager**: UV (modern Python package manager)
 - **Key Dependencies**: 
+  - `pydantic-ai` for AI-powered sentiment analysis agents
   - `pika` for RabbitMQ message consumption, publishing, and connection monitoring
   - `pydantic` for data validation and schema enforcement
   - `dotenv` for environment variable management
   - `structlog` for structured logging with JSON output
+  - `logfire` for observability and PydanticAI instrumentation
+  - `base58` for Solana address validation
+  - `nest-asyncio` for async event loop management
 - **Testing**: 
   - `pytest` for unit testing framework
   - `pytest-mock` for mocking functionality
   - `pytest-cov` for coverage reporting
+  - `pytest-asyncio` for async test support
+  - `syrupy` for snapshot testing agent responses
 - **Containerization**:
   - `Docker` for containerization with Python 3.12 slim image
   - `docker-compose` for multi-service orchestration
@@ -73,6 +79,51 @@ uv run pytest tests/test_transformation.py --cov=src.core.transformation --cov-r
 # Run tweet handler tests
 uv run pytest tests/test_tweet_handler.py
 
+# Run tweet handler tests with coverage
+uv run pytest tests/test_tweet_handler.py --cov=src.handlers.tweet --cov-report=term-missing
+
+# Sentiment Analysis and Agent Tests
+
+# Run all sentiment analysis tests
+uv run pytest tests/test_sentiment_analyzer.py -v
+
+# Run sentiment analysis tests with coverage
+uv run pytest tests/test_sentiment_analyzer.py --cov=src.core.sentiment_analyzer --cov-report=term-missing
+
+# Run address validation tests
+uv run pytest tests/test_address_validators.py -v
+
+# Run address validation tests with coverage
+uv run pytest tests/test_address_validators.py --cov=src.core.utils.address_validators --cov-report=term-missing
+
+# Agent Integration Tests (require OPENAI_API_KEY)
+
+# Run all agent integration tests (requires OpenAI API key)
+OPENAI_API_KEY=your_key uv run pytest tests/integration/test_agents_integration.py -v
+
+# Run specific agent integration tests
+uv run pytest tests/integration/test_agents_integration.py::TestTextSearchAgent -v
+uv run pytest tests/integration/test_agents_integration.py::TestImageSearchAgent -v
+uv run pytest tests/integration/test_agents_integration.py::TestFirecrawlAgent -v
+
+# Run individual test cases for debugging
+uv run pytest tests/integration/test_agents_integration.py::TestIndividualTextCases::test_polygon_explicit_chain_evm_address -v
+
+# Update snapshots when agent responses change
+uv run pytest tests/integration/test_agents_integration.py --snapshot-update
+
+# Run integration tests with specific marker
+uv run pytest -m integration -v
+
+# Skip integration tests (run only unit tests) 
+uv run pytest -m "not integration" -v
+
+# Run integration tests with coverage
+uv run pytest tests/integration/ --cov=src.core.agents --cov-report=term-missing
+
+# Run all sentiment analysis related tests
+uv run pytest tests/test_sentiment_analyzer.py tests/test_address_validators.py tests/integration/test_agents_integration.py -v
+
 # Docker Development Commands
 
 # Build and start all services (RabbitMQ + News Watcher)
@@ -102,20 +153,34 @@ docker-compose down -v
 
 ## Architecture
 
-**Simplified message processing architecture** focused on RabbitMQ operations:
+**AI-powered sentiment analysis architecture** for cryptocurrency token detection:
 
 - **Main Application** (`main.py`): Application orchestration and message consumption coordination
+- **Sentiment Analyzer** (`src/core/sentiment_analyzer.py`): Main sentiment analysis orchestration with agent coordination
+- **AI Agents** (`src/core/agents/` package): PydanticAI-powered agents for text, image, and web content analysis
 - **MQ Subscriber** (`src/core/mq_subscriber.py`): RabbitMQ message consumption and publishing service with schema validation and automatic buffering
 - **Data Transformation** (`src/core/transformation.py`): Tweet data standardization and format conversion pipeline
-- **Schema Validation** (`src/models/schemas.py`): Pydantic models for data validation and consistency
+- **Schema Validation** (`src/models/schemas.py`): Pydantic models for data validation, token details, and sentiment analysis results
 - **RabbitMQ Monitor** (`src/core/rabbitmq_monitor.py`): Automatic connection monitoring with health checks and reconnection logic
-- **Message Handlers** (`src/handlers/` package): Modular message processing
-- **Structured Logging** (`src/config/logging_config.py`): Centralized logging configuration
+- **Message Handlers** (`src/handlers/` package): Modular message processing with sentiment analysis integration
+- **Address Validators** (`src/core/utils/` package): Blockchain address validation utilities for Solana and EVM chains
+- **Configuration Management** (`src/config/` package): Structured logging, Logfire observability, and sentiment analysis configuration
+
+### Sentiment Analysis Architecture
+
+**AI Agent System** (cryptocurrency token detection):
+- **TextSearchAgent** (`src/core/agents/text_search_agent.py`): Analyzes tweet text content for token announcements and blockchain addresses
+- **ImageSearchAgent** (`src/core/agents/image_search_agent.py`): Extracts and analyzes text from images for token information
+- **FirecrawlAgent** (`src/core/agents/firecrawl_agent.py`): Scrapes and analyzes linked websites for token announcements
+
+**Agent Orchestration** (`src/core/sentiment_analyzer.py`): Coordinates multiple agents and merges analysis results
+
+**Address Validation** (`src/core/utils/address_validators.py`): Validates Solana and EVM blockchain addresses using regex patterns and cryptographic validation
 
 ### Handler Architecture
 
 **Message Handlers** (process incoming message content):
-- `src/handlers/tweet.py`: Tweet message processing with transformation pipeline and data validation
+- `src/handlers/tweet.py`: Tweet message processing with transformation pipeline, data validation, and sentiment analysis integration
 
 **Handler Package** (`src/handlers/__init__.py`): Centralized exports for message handlers
 
@@ -126,30 +191,51 @@ docker-compose down -v
 │   ├── __init__.py           # Package initialization
 │   ├── config/               # Configuration modules
 │   │   ├── __init__.py      # Package exports
-│   │   └── logging_config.py # Structured logging configuration
+│   │   ├── logging_config.py # Structured logging configuration
+│   │   ├── logfire_config.py # Logfire observability configuration
+│   │   └── sentiment_config.py # Sentiment analysis and agent configuration
 │   ├── core/                 # Core business logic modules
 │   │   ├── __init__.py      # Package exports
+│   │   ├── agents/          # AI sentiment analysis agents
+│   │   │   ├── __init__.py  # Agent exports
+│   │   │   ├── text_search_agent.py # Text content analysis agent
+│   │   │   ├── image_search_agent.py # Image text extraction agent
+│   │   │   └── firecrawl_agent.py # Web scraping agent
+│   │   ├── utils/           # Utility functions
+│   │   │   ├── __init__.py  # Utility exports
+│   │   │   └── address_validators.py # Blockchain address validation
+│   │   ├── sentiment_analyzer.py # Main sentiment analysis orchestration
 │   │   ├── mq_subscriber.py # RabbitMQ message consumption and publishing service
 │   │   ├── message_buffer.py # Thread-safe FIFO message buffer for RabbitMQ outages
 │   │   ├── transformation.py # Tweet data transformation and standardization pipeline
 │   │   └── rabbitmq_monitor.py # RabbitMQ connection monitoring with automatic reconnection
 │   ├── handlers/             # Message handlers package
 │   │   ├── __init__.py      # Package exports
-│   │   └── tweet.py         # Tweet message handler with transformation pipeline
+│   │   └── tweet.py         # Tweet message handler with transformation and sentiment analysis
 │   └── models/               # Data models and schemas
 │       ├── __init__.py      # Package exports
-│       └── schemas.py       # Pydantic models for data validation and schema enforcement
+│       └── schemas.py       # Pydantic models for data validation, token details, and sentiment analysis
 ├── tests/                    # Comprehensive test suite
 │   ├── __init__.py          # Package initialization
 │   ├── conftest.py          # Shared test fixtures
+│   ├── integration/         # Integration tests
+│   │   ├── __init__.py      # Integration test package
+│   │   ├── README.md        # Integration test documentation  
+│   │   ├── __snapshots__/   # Snapshot test data
+│   │   ├── test_agents_integration.py # Agent integration tests
+│   │   └── test_data.py     # Test data for agent integration
 │   ├── test_mq_subscriber.py # MQSubscriber functionality tests
 │   ├── test_rabbitmq_monitor.py # RabbitMQ connection monitor tests
 │   ├── test_message_buffer.py # MessageBuffer tests
 │   ├── test_transformation.py # Transformation pipeline tests
 │   ├── test_tweet_handler.py # Tweet handler tests
+│   ├── test_sentiment_analyzer.py # Sentiment analyzer tests
+│   ├── test_address_validators.py # Address validation tests
 │   └── test_main_rabbitmq.py # Main application integration tests
 ├── examples/                # Example files and sample data
-│   └── tweet-sample.json   # Sample tweet data for testing and development
+│   ├── tweet-sample.json   # Sample tweet data for testing and development
+│   ├── sentiment-analyze.ipynb # Jupyter notebook for sentiment analysis examples
+│   └── tg_bots_dialog.ipynb # Jupyter notebook for bot dialog examples
 ├── docs/                    # Documentation files
 │   ├── review-process.md   # Code review process documentation
 │   └── unit-testing-plan.md # Testing strategy documentation
@@ -193,6 +279,13 @@ RABBITMQ_QUEUE=tweet_events
 RABBITMQ_CONSUME_QUEUE=incoming_messages
 RABBITMQ_USERNAME=admin
 RABBITMQ_PASSWORD=changeme
+
+# Logfire Configuration
+LOGFIRE_ENABLED=true
+LOGFIRE_TOKEN=your_logfire_token_here
+LOGFIRE_SERVICE_NAME=tweets-notifier
+LOGFIRE_ENVIRONMENT=development
+SERVICE_VERSION=0.1.0
 ```
 
 ### RabbitMQ Monitor Configuration
@@ -226,6 +319,66 @@ Example `.env` configuration:
 MESSAGE_BUFFER_ENABLED=true
 MESSAGE_BUFFER_SIZE=10
 ```
+
+### Sentiment Analysis Configuration
+
+The sentiment analysis system uses AI agents to detect cryptocurrency token announcements. Configuration is managed through environment variables and dedicated configuration modules.
+
+- **`OPENAI_API_KEY`**: OpenAI API key for PydanticAI agents (required for sentiment analysis)
+- **`SENTIMENT_MODEL_NAME`**: AI model to use for analysis (default: "openai:gpt-4o")
+- **`FIRECRAWL_MCP_SERVER_URL`**: Firecrawl MCP server URL for web scraping (default: "http://localhost:3000/sse")
+- **`MAX_CONCURRENT_ANALYSIS`**: Maximum concurrent agent operations (default: 5)
+- **`AGENT_RETRIES`**: Number of retry attempts for failed agent operations (default: 4)
+
+Example `.env` configuration:
+```bash
+# Sentiment Analysis Configuration
+OPENAI_API_KEY=your_openai_api_key_here
+SENTIMENT_MODEL_NAME=openai:gpt-4o
+FIRECRAWL_MCP_SERVER_URL=http://localhost:3000/sse
+MAX_CONCURRENT_ANALYSIS=5
+AGENT_RETRIES=4
+```
+
+#### Agent System Configuration
+
+The system includes three specialized agents:
+
+- **TextSearchAgent**: Analyzes tweet text content for token announcements using regex patterns and blockchain identification
+- **ImageSearchAgent**: Extracts text from images and analyzes for token information
+- **FirecrawlAgent**: Scrapes linked websites for token announcement content
+
+Each agent uses blockchain chain ID mapping and address validation patterns to identify:
+- **EVM Addresses**: Ethereum, BSC, Polygon, Arbitrum, etc. (0x + 40 hex characters)
+- **Solana Addresses**: Base58 encoded addresses (32-44 characters, typically 44)
+
+### Logfire Configuration
+
+The application includes comprehensive observability through Logfire, providing tracing and metrics for all PydanticAI agents.
+
+- **`LOGFIRE_ENABLED`**: Enable/disable Logfire observability (default: "true")
+- **`LOGFIRE_TOKEN`**: Logfire API token (required for observability)
+- **`LOGFIRE_SERVICE_NAME`**: Service name for tracing (default: "sentiment-analyzer")
+- **`LOGFIRE_ENVIRONMENT`**: Environment name for tracing (default: value of ENVIRONMENT or "development")
+- **`SERVICE_VERSION`**: Service version for tracing (default: "0.1.0")
+
+Example `.env` configuration:
+```bash
+# Logfire Observability
+LOGFIRE_ENABLED=true
+LOGFIRE_TOKEN=your_logfire_token_here
+LOGFIRE_SERVICE_NAME=sentiment-analyzer
+LOGFIRE_ENVIRONMENT=production
+SERVICE_VERSION=0.1.0
+```
+
+#### Logfire Features
+
+- **PydanticAI Instrumentation**: Automatic instrumentation of all PydanticAI agents via `instrument_pydantic_ai()`
+- **Agent Execution Tracing**: Detailed spans for TextSearchAgent, ImageSearchAgent, and FirecrawlAgent operations
+- **Performance Metrics**: Execution time, input size, result types, and success/failure tracking
+- **Error Tracking**: Comprehensive error logging with context and stack traces
+- **Correlation**: Integration with existing structured logging for full observability
 
 ## Docker Containerization
 
@@ -294,15 +447,114 @@ docker-compose down
 
 ## Key Components
 
+- **Sentiment Analysis** (`src/core/sentiment_analyzer.py`): AI-powered cryptocurrency token detection orchestration and agent coordination
+- **AI Agent System** (`src/core/agents/` package): PydanticAI-powered agents for text, image, and web content analysis
+- **Address Validation** (`src/core/utils/address_validators.py`): Blockchain address validation for Solana and EVM chains
 - **Message Consumption** (`src/core/mq_subscriber.py`): RabbitMQ message consumption in dedicated threads with automatic reconnection
 - **Message Publishing** (`src/core/mq_subscriber.py`): RabbitMQ service with connection management, schema validation, and automatic buffering
 - **Data Transformation** (`src/core/transformation.py`): Tweet data standardization with datetime parsing and URL extraction
-- **Schema Validation** (`src/models/schemas.py`): Pydantic models ensuring data consistency and type safety
+- **Schema Validation** (`src/models/schemas.py`): Pydantic models ensuring data consistency, type safety, and token analysis results
 - **Message Buffer** (`src/core/message_buffer.py`): Thread-safe FIFO buffer system for storing messages during RabbitMQ outages
-- **Message Processing** (`src/handlers/` package): Modular message processing and transformation
+- **Message Processing** (`src/handlers/` package): Modular message processing with sentiment analysis integration
 - **Message Logging** (`main.py`): Simple message handler that logs all incoming messages with metadata
 - **Structured Logging**: JSON-formatted logs separated by level (error.log, warning.log, app.log)
 - **Graceful Shutdown**: Signal handling with proper RabbitMQ connection and consumer cleanup
+
+## AI Agent System
+
+The application features a sophisticated AI-powered sentiment analysis system for detecting cryptocurrency token announcements in social media content.
+
+### Agent Architecture
+
+The system uses three specialized PydanticAI agents, each optimized for different content types:
+
+#### TextSearchAgent (`src/core/agents/text_search_agent.py`)
+- **Purpose**: Analyzes tweet text content for token announcements and blockchain addresses
+- **Capabilities**: 
+  - Regex pattern matching for contract addresses
+  - Blockchain identification using chain ID mapping
+  - Token announcement detection in natural language
+  - Address format validation (EVM vs Solana)
+- **Input**: Tweet text content
+- **Output**: TokenDetails with address, chain info, and announcement confirmation
+
+#### ImageSearchAgent (`src/core/agents/image_search_agent.py`)
+- **Purpose**: Extracts and analyzes text from images for token information
+- **Capabilities**:
+  - OCR text extraction from images
+  - Pattern recognition for addresses and announcements
+  - Same validation logic as TextSearchAgent applied to image text
+  - Handles screenshots, charts, and promotional images
+- **Input**: Image URLs from tweets
+- **Output**: TokenDetails extracted from image content
+
+#### FirecrawlAgent (`src/core/agents/firecrawl_agent.py`)
+- **Purpose**: Scrapes and analyzes linked websites for token announcements
+- **Capabilities**:
+  - Web page scraping via Firecrawl MCP server
+  - Content analysis of linked articles and websites
+  - Deep inspection of external token announcement sources
+  - Structured data extraction from web pages
+- **Input**: URLs from tweet links
+- **Output**: TokenDetails found in web content
+
+### Result Schema
+
+All agents return structured results using these Pydantic models:
+
+```python
+class TokenDetails(BaseModel):
+    chain_id: Optional[int]              # Blockchain chain ID (1=Ethereum, 56=BSC, etc.)
+    chain_name: Optional[str]            # Blockchain name
+    is_release: Optional[bool]           # Whether this is a token release announcement
+    chain_defined_explicitly: Optional[bool]  # Whether blockchain was explicitly mentioned
+    definition_fragment: Optional[str]   # Text fragment mentioning blockchain
+    token_address: str                   # Contract address
+
+class NoTokenFound(BaseModel):           # No token information detected
+    pass
+
+class RelseaseAnnouncementWithoutDetails(BaseModel):  # Release detected but no details
+    pass
+
+# Union type for all possible results
+SentimentAnalysisResult = Union[TokenDetails, NoTokenFound, RelseaseAnnouncementWithoutDetails]
+```
+
+### Agent Orchestration
+
+The `sentiment_analyzer.py` module coordinates agent execution:
+
+1. **Input Processing**: Receives tweet data with text, images, and links
+2. **Agent Selection**: Determines which agents to run based on available content
+3. **Parallel Execution**: Runs multiple agents concurrently for efficiency
+4. **Result Merging**: Combines results using priority logic (TokenDetails > ReleaseAnnouncement > NoTokenFound)
+5. **Output Integration**: Adds sentiment analysis results to tweet output schema
+
+### Blockchain Support
+
+The system supports major blockchain networks:
+
+**EVM-Compatible Chains**:
+- Ethereum Mainnet (Chain ID: 1)
+- BNB Smart Chain (Chain ID: 56)
+- Polygon (Chain ID: 137)
+- Arbitrum One (Chain ID: 42161)
+- Optimism (Chain ID: 10)
+- Avalanche C-Chain (Chain ID: 43114)
+- Base (Chain ID: 8453)
+- And 20+ additional EVM chains
+
+**Non-EVM Chains**:
+- Solana (Base58 address validation)
+
+### Address Validation
+
+Robust address validation ensures accuracy:
+
+- **EVM Addresses**: Regex pattern `^0x[a-fA-F0-9]{40}$` with checksum validation
+- **Solana Addresses**: Base58 decoding with 32-byte validation and length checks
+- **Format Detection**: Automatic blockchain type detection based on address format
 
 ## RabbitMQ Connection Monitoring
 
@@ -413,16 +665,29 @@ The transformation system standardizes tweet data format and extracts key inform
 ```python
 {
     "data_source": {
-        "name": "Twitter",           # Platform identifier
+        "name": "Twitter",           # Platform identifier  
         "author_name": "username",   # Tweet author username
         "author_id": "12345"         # Tweet author user ID
     },
     "createdAt": 1721765647,         # Unix timestamp
     "text": "Tweet content...",       # Processed tweet text
     "media": ["https://..."],        # Media URLs array
-    "links": ["https://..."]         # External links array
+    "links": ["https://..."],        # External links array
+    "sentiment_analysis": {          # AI-powered token detection results
+        "chain_id": 1,               # Blockchain chain ID (1=Ethereum, 56=BSC, etc.)
+        "chain_name": "Ethereum",    # Blockchain name
+        "is_release": true,          # Whether this is a token release announcement
+        "chain_defined_explicitly": true,  # Whether blockchain was explicitly mentioned
+        "definition_fragment": "launching on Ethereum",  # Text fragment mentioning blockchain
+        "token_address": "0x742d35Cc6765C0532575f5A2c0a078Df8a2D4e5e"  # Contract address
+    }
 }
 ```
+
+**Sentiment Analysis Result Types**:
+- **TokenDetails**: Complete token information with address and blockchain details
+- **RelseaseAnnouncementWithoutDetails**: Token release detected but no specific details found  
+- **NoTokenFound**: No token information detected in the content
 
 ### Integration with Message Publishing
 
@@ -468,14 +733,14 @@ conftest.py                        # Root-level fixtures for main runner
 ```
 
 ### Test Categories
-- **Initialization Tests**: WebSocketManager setup, callback assignment, initial state validation
-- **Signal Handler Tests**: Graceful shutdown, WebSocket closing, error handling, different signal types
-- **Connection Management Tests**: WebSocket connection lifecycle, retry logic, error handling, shutdown coordination
-- **WebSocket Lifecycle Tests**: WebSocketApp creation, callback assignment, ping parameters, current_ws reference management
-- **Error Handling Tests**: Comprehensive error scenarios, exception types, retry mechanisms, finally block cleanup
-- **Integration Tests**: End-to-end workflows, complete lifecycle management, signal-to-shutdown sequences
-- **RabbitMQ Monitor Tests**: Connection monitoring, health checks, automatic reconnection, failure tracking, thread management, environment configuration
+- **Sentiment Analysis Tests**: AI agent coordination, result merging, and orchestration logic
+- **Agent Integration Tests**: PydanticAI agent testing with real API calls and snapshot validation
+- **Address Validation Tests**: Blockchain address validation for Solana and EVM chains
 - **Transformation Tests**: Data transformation pipeline, schema validation, datetime parsing, URL extraction, edge cases
+- **RabbitMQ Monitor Tests**: Connection monitoring, health checks, automatic reconnection, failure tracking, thread management, environment configuration
+- **Message Buffer Tests**: Thread-safe buffer operations, FIFO queue management, and RabbitMQ integration
+- **Tweet Handler Tests**: Message processing with sentiment analysis integration
+- **Integration Tests**: End-to-end workflows, complete lifecycle management, and system integration
 
 ### Test Execution Options
 ```bash
@@ -515,9 +780,13 @@ uv run pytest test_websocket_manager.py --cov=src.core.websocket_manager --cov-r
 ```
 
 ### Test Coverage
-- **WebSocket Manager Coverage**: 92% of src/core/websocket_manager.py (70/70 tests passing across all components)
+- **Sentiment Analysis Coverage**: Comprehensive testing of AI agent orchestration, result merging, and token detection workflows
+- **Agent Integration Coverage**: Real-world testing of PydanticAI agents with API calls, snapshot validation, and error handling
+- **Address Validation Coverage**: Complete testing of Solana and EVM address validation with edge cases and format detection
 - **RabbitMQ Monitor Coverage**: Comprehensive test coverage with 23 test cases covering all monitor functionality
-- **Tested Components**: WebSocketManager initialization, signal handling, connection management, WebSocket lifecycle, comprehensive error handling, integration workflows, MQMessenger functionality, RabbitMQ connection monitoring, data transformation pipeline, schema validation, and tweet handler operations
+- **Transformation Coverage**: Complete pipeline testing with 27 test cases covering data transformation, schema validation, and integration
+- **Message Buffer Coverage**: 27 test cases covering thread safety, FIFO operations, and RabbitMQ failure handling
+- **Tested Components**: Sentiment analysis orchestration, AI agent coordination, blockchain address validation, message processing with token detection, RabbitMQ connection monitoring, data transformation pipeline, schema validation, and tweet handler operations with AI integration
 - **Connection Management Tests** (8 tests): Connection lifecycle, retry logic, error handling, shutdown coordination
   - Successful WebSocket connection establishment
   - Connection retry logic with 5-second delays  
@@ -584,6 +853,24 @@ uv run pytest test_websocket_manager.py --cov=src.core.websocket_manager --cov-r
   - Edge cases including malformed data, missing fields, and invalid formats
   - Integration with tweet handler for end-to-end processing
   - Fallback values and data consistency validation
+- **Sentiment Analysis Tests**: AI-powered token detection testing
+  - Agent orchestration and coordination logic
+  - Result merging with priority-based selection
+  - Integration with tweet processing pipeline
+  - Error handling for AI agent failures
+- **Agent Integration Tests**: Real-world AI agent testing with live API calls
+  - TextSearchAgent testing with various tweet content patterns
+  - ImageSearchAgent testing with OCR and image analysis
+  - FirecrawlAgent testing with web scraping scenarios
+  - Snapshot testing for consistent agent responses
+  - Chain ID detection and blockchain identification
+  - Address validation across EVM and Solana networks
+  - Token announcement detection accuracy
+- **Address Validation Tests**: Blockchain address validation comprehensive testing
+  - EVM address format validation with regex patterns
+  - Solana address Base58 decoding and length validation
+  - Edge cases for malformed addresses and invalid formats
+  - Automatic blockchain type detection based on address format
 
 ## Logging
 
@@ -597,12 +884,14 @@ uv run pytest test_websocket_manager.py --cov=src.core.websocket_manager --cov-r
 ## Development Notes
 
 ### Application Design
-- **Message-Centric Architecture**: Focused on RabbitMQ message consumption and processing
-- **Modular Architecture**: Separated concerns with dedicated handler modules for maintainability
-- **Continuous Operation**: Designed for long-running message processing
-- **Thread-Safe**: Consumer operations run in dedicated daemon threads
-- **Integrated Processing**: MQSubscriber includes both consumption and publishing capabilities
-- **Graceful Shutdown**: Signal handling ensures proper consumer and connection cleanup
+- **AI-Powered Architecture**: Focused on cryptocurrency sentiment analysis with PydanticAI agents
+- **Message-Centric Processing**: Built on RabbitMQ message consumption and processing foundation
+- **Agent Orchestration**: Coordinates multiple AI agents for comprehensive token detection
+- **Modular Architecture**: Separated concerns with dedicated agent modules, handlers, and utilities
+- **Continuous Operation**: Designed for long-running sentiment analysis and message processing
+- **Thread-Safe**: Consumer operations and agent coordination run in dedicated daemon threads
+- **Integrated Processing**: MQSubscriber includes both consumption and publishing with sentiment analysis integration
+- **Graceful Shutdown**: Signal handling ensures proper consumer, agent, and connection cleanup
 
 ### MQSubscriber Architecture
 - **Dual Functionality**: Supports both message consumption and publishing
@@ -612,20 +901,33 @@ uv run pytest test_websocket_manager.py --cov=src.core.websocket_manager --cov-r
 - **Clean Shutdown**: Proper consumer cancellation and thread termination
 
 ### Handler Development
-- **Simple Processing**: Handlers focus on data transformation and processing logic
+- **Sentiment Integration**: Handlers integrate AI-powered sentiment analysis for token detection
+- **Simple Processing**: Handlers focus on data transformation, processing logic, and sentiment coordination
 - **No Dependencies**: Tweet handler no longer requires MQSubscriber injection
-- **Pure Functions**: Handlers are stateless and testable
-- **Consistent Interface**: All handlers follow established patterns for logging and error handling
-- **Individual Testing**: Each handler can be tested independently
+- **Pure Functions**: Handlers are stateless and testable with consistent sentiment analysis integration
+- **Consistent Interface**: All handlers follow established patterns for logging, error handling, and AI agent coordination
+- **Individual Testing**: Each handler can be tested independently with mocked AI agents
+
+### Agent Development
+- **PydanticAI Integration**: All agents built on PydanticAI framework for structured AI interactions
+- **Specialized Roles**: Each agent optimized for specific content types (text, images, web content)
+- **Blockchain Intelligence**: Agents incorporate comprehensive blockchain knowledge and address validation
+- **Robust Error Handling**: Retry logic, fallback mechanisms, and graceful degradation
+- **Observability**: Full Logfire integration for monitoring agent performance and results
+- **Testable Design**: Agents support both unit testing and integration testing with real API calls
 
 ### Configuration Management
-- **Environment Variables**: RabbitMQ connection settings via environment variables
+- **Environment Variables**: RabbitMQ connection settings and AI agent configuration via environment variables
 - **Environment Detection**: `ENVIRONMENT` setting controls logging format (development/production)
 - **Queue Configuration**: Separate configuration for publishing and consuming queues
 - **Authentication**: Optional username/password authentication support
+- **AI Configuration**: OpenAI API keys, model selection, and agent retry settings
+- **Blockchain Configuration**: Chain ID mapping and address validation patterns
 
 ### Monitoring & Observability
 - **Structured Logging**: All events and errors logged with contextual metadata
 - **Message Logging**: Incoming messages are logged with routing key and metadata
+- **Agent Monitoring**: AI agent execution tracking, performance metrics, and result logging
 - **Connection Monitoring**: Automatic health checks and reconnection logging
 - **Consumer Status**: Real-time monitoring of consumer thread status
+- **Logfire Integration**: Comprehensive observability for PydanticAI agents with execution traces, performance metrics, and error tracking
