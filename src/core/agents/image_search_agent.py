@@ -8,6 +8,7 @@ from ...models.schemas import SentimentAnalysisResult, NoTokenFound
 from ...config.logging_config import get_logger
 from ...config.sentiment_config import IMAGE_SEARCH_PROMPT, DEFAULT_AGENT_RETRIES
 from ...config.logfire_config import create_logfire_span, log_agent_metrics
+from .retry_wrapper import AgentRetryWrapper
 
 logger = get_logger(__name__)
 
@@ -27,13 +28,30 @@ class ImageSearchAgent:
         self.agent = Agent[None, SentimentAnalysisResult](  # type: ignore[call-overload]
             model=model_name,
             result_type=SentimentAnalysisResult,
-            retries=DEFAULT_AGENT_RETRIES,
+            retries=0,  # Disable PydanticAI retries, use our custom retry wrapper
             system_prompt=IMAGE_SEARCH_PROMPT
         )
+        self.retry_wrapper = AgentRetryWrapper(max_retries=DEFAULT_AGENT_RETRIES)
     
     async def run(self, image_url: str) -> SentimentAnalysisResult:
         """
-        Process image to detect token announcements
+        Process image to detect token announcements with retry logic for non-TokenDetails results.
+        Args:
+            image_url: The url of an image
+            
+        Returns:
+            The token data if found
+        """
+        return await self.retry_wrapper.run_with_retry(
+            self._run_agent,
+            "image_search",
+            image_url
+        )
+    
+    async def _run_agent(self, image_url: str) -> SentimentAnalysisResult:
+        """
+        Internal method to run the agent without retry logic.
+        
         Args:
             image_url: The url of an image
             
@@ -45,7 +63,7 @@ class ImageSearchAgent:
         
         # Create Logfire span for tracing
         span = create_logfire_span(
-            "image_search_agent.run",
+            "image_search_agent._run_agent",
             image_url=image_url,
             url_length=url_length,
             agent_type="image_search"
@@ -71,8 +89,8 @@ class ImageSearchAgent:
                 image_url=image_url
             )
             
-            logger.info(
-                "ImageSearchAgent completed analysis", 
+            logger.debug(
+                "ImageSearchAgent completed single attempt", 
                 image_url=image_url,
                 execution_time=execution_time,
                 result_type=result_type

@@ -9,6 +9,7 @@ from ...models.schemas import SentimentAnalysisResult, NoTokenFound
 from ...config.logging_config import get_logger
 from ...config.sentiment_config import FIRECRAWL_SEARCH_PROMPT, DEFAULT_AGENT_RETRIES
 from ...config.logfire_config import create_logfire_span, log_agent_metrics
+from .retry_wrapper import AgentRetryWrapper
 
 logger = get_logger(__name__)
 
@@ -36,14 +37,31 @@ class FirecrawlAgent:
         self.agent = Agent[None, SentimentAnalysisResult](  # type: ignore[call-overload]
             model=model_name,
             result_type=SentimentAnalysisResult,
-            retries=DEFAULT_AGENT_RETRIES,
+            retries=0,  # Disable PydanticAI retries, use our custom retry wrapper
             system_prompt=FIRECRAWL_SEARCH_PROMPT,
             mcp_servers=[self.firecrawl_server]
         )
+        self.retry_wrapper = AgentRetryWrapper(max_retries=DEFAULT_AGENT_RETRIES)
     
     async def run(self, url: str) -> SentimentAnalysisResult:
         """
-        Process a URL using the agent with Firecrawl capabilities.
+        Process a URL using the agent with Firecrawl capabilities and retry logic for non-TokenDetails results.
+        
+        Args:
+            url: The url to crawl
+            
+        Returns:
+            The token data if found
+        """
+        return await self.retry_wrapper.run_with_retry(
+            self._run_agent,
+            "firecrawl",
+            url
+        )
+    
+    async def _run_agent(self, url: str) -> SentimentAnalysisResult:
+        """
+        Internal method to run the agent without retry logic.
         
         Args:
             url: The url to crawl
@@ -56,7 +74,7 @@ class FirecrawlAgent:
         
         # Create Logfire span for tracing
         span = create_logfire_span(
-            "firecrawl_agent.run",
+            "firecrawl_agent._run_agent",
             url=url,
             url_length=url_length,
             agent_type="firecrawl"
@@ -84,8 +102,8 @@ class FirecrawlAgent:
                 url=url
             )
             
-            logger.info(
-                "FirecrawlAgent completed analysis", 
+            logger.debug(
+                "FirecrawlAgent completed single attempt", 
                 url=url,
                 execution_time=execution_time,
                 result_type=result_type

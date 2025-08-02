@@ -8,6 +8,7 @@ from ...models.schemas import SentimentAnalysisResult, NoTokenFound
 from ...config.logging_config import get_logger
 from ...config.sentiment_config import TEXT_SEARCH_PROMPT, DEFAULT_AGENT_RETRIES
 from ...config.logfire_config import create_logfire_span, log_agent_metrics
+from .retry_wrapper import AgentRetryWrapper
 
 logger = get_logger(__name__)
 
@@ -27,13 +28,30 @@ class TextSearchAgent:
         self.agent = Agent[None, SentimentAnalysisResult](  # type: ignore[call-overload]
             model=model_name,
             result_type=SentimentAnalysisResult,
-            retries=DEFAULT_AGENT_RETRIES,
+            retries=0,  # Disable PydanticAI retries, use our custom retry wrapper
             system_prompt=TEXT_SEARCH_PROMPT
         )
+        self.retry_wrapper = AgentRetryWrapper(max_retries=DEFAULT_AGENT_RETRIES)
     
     async def run(self, text: str) -> SentimentAnalysisResult:
         """
-        Process text to detect token announcements
+        Process text to detect token announcements with retry logic for non-TokenDetails results.
+        Args:
+            text: The given text
+            
+        Returns:
+            The token data if found
+        """
+        return await self.retry_wrapper.run_with_retry(
+            self._run_agent,
+            "text_search",
+            text
+        )
+    
+    async def _run_agent(self, text: str) -> SentimentAnalysisResult:
+        """
+        Internal method to run the agent without retry logic.
+        
         Args:
             text: The given text
             
@@ -45,7 +63,7 @@ class TextSearchAgent:
         
         # Create Logfire span for tracing
         span = create_logfire_span(
-            "text_search_agent.run",
+            "text_search_agent._run_agent",
             text_length=text_length,
             agent_type="text_search"
         )
@@ -70,8 +88,8 @@ class TextSearchAgent:
                 text_preview=text[:100] + "..." if text_length > 100 else text
             )
             
-            logger.info(
-                "TextSearchAgent completed analysis", 
+            logger.debug(
+                "TextSearchAgent completed single attempt", 
                 text_length=text_length,
                 execution_time=execution_time,
                 result_type=result_type
