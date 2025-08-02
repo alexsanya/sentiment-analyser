@@ -99,6 +99,12 @@ uv run pytest tests/test_address_validators.py -v
 # Run address validation tests with coverage
 uv run pytest tests/test_address_validators.py --cov=src.core.utils.address_validators --cov-report=term-missing
 
+# Run retry wrapper tests
+uv run pytest tests/test_retry_wrapper.py -v
+
+# Run retry wrapper tests with coverage
+uv run pytest tests/test_retry_wrapper.py --cov=src.core.agents.retry_wrapper --cov-report=term-missing
+
 # Agent Integration Tests (require OPENAI_API_KEY)
 
 # Run all agent integration tests (requires OpenAI API key)
@@ -125,7 +131,7 @@ uv run pytest -m "not integration" -v
 uv run pytest tests/integration/ --cov=src.core.agents --cov-report=term-missing
 
 # Run all sentiment analysis related tests
-uv run pytest tests/test_sentiment_analyzer.py tests/test_address_validators.py tests/integration/test_agents_integration.py -v
+uv run pytest tests/test_sentiment_analyzer.py tests/test_address_validators.py tests/test_retry_wrapper.py tests/integration/test_agents_integration.py -v
 
 # Docker Development Commands
 
@@ -204,7 +210,8 @@ docker-compose down -v
 │   │   │   ├── __init__.py  # Agent exports
 │   │   │   ├── text_search_agent.py # Text content analysis agent
 │   │   │   ├── image_search_agent.py # Image text extraction agent
-│   │   │   └── firecrawl_agent.py # Web scraping agent
+│   │   │   ├── firecrawl_agent.py # Web scraping agent
+│   │   │   └── retry_wrapper.py # Exponential backoff retry wrapper for agents
 │   │   ├── utils/           # Utility functions
 │   │   │   ├── __init__.py  # Utility exports
 │   │   │   └── address_validators.py # Blockchain address validation
@@ -236,6 +243,7 @@ docker-compose down -v
 │   ├── test_tweet_handler.py # Tweet handler tests
 │   ├── test_sentiment_analyzer.py # Sentiment analyzer tests
 │   ├── test_address_validators.py # Address validation tests
+│   ├── test_retry_wrapper.py # Agent retry wrapper tests
 │   └── test_main_rabbitmq.py # Main application integration tests
 ├── examples/                # Example files and sample data
 │   ├── tweet-sample.json   # Sample tweet data for testing and development
@@ -915,6 +923,12 @@ uv run pytest test_websocket_manager.py --cov=src.core.websocket_manager --cov-r
   - Solana address Base58 decoding and length validation
   - Edge cases for malformed addresses and invalid formats
   - Automatic blockchain type detection based on address format
+- **Retry Wrapper Tests**: Agent retry logic comprehensive testing with exponential backoff
+  - Progressive delay validation (1s, 2s, 4s, 8s) for retry attempts
+  - TokenDetails success conditions and non-TokenDetails retry behavior
+  - Maximum retry limits and timeout handling
+  - Exception propagation and error recovery testing
+  - Concurrent execution and thread safety validation
 
 ## Logging
 
@@ -981,12 +995,13 @@ The application demonstrates several architectural best practices:
 - **Automatic Token Detection**: Seamless integration between AI analysis and action publishing
 - **Message-Driven Architecture**: Asynchronous processing with RabbitMQ message queues
 - **Fault Tolerance**: Built-in buffering, reconnection, and error handling mechanisms
+- **Intelligent Retry Logic**: Exponential backoff retry wrapper for AI agents with progressive delays (1s, 2s, 4s, 8s)
 - **Observability**: Comprehensive logging and tracing throughout the system
 
 ### Monitoring & Observability
 - **Structured Logging**: All events and errors logged with contextual metadata
 - **Message Logging**: Incoming messages are logged with routing key and metadata
-- **Agent Monitoring**: AI agent execution tracking, performance metrics, and result logging
+- **Agent Monitoring**: AI agent execution tracking, performance metrics, retry attempt logging, and result tracking with exponential backoff delays
 - **Connection Monitoring**: Automatic health checks and reconnection logging
 - **Consumer Status**: Real-time monitoring of consumer thread status
 - **Logfire Integration**: Comprehensive observability for PydanticAI agents with execution traces, performance metrics, and error tracking
