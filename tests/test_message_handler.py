@@ -5,7 +5,7 @@ import threading
 import time
 from unittest.mock import Mock, MagicMock, patch, call
 import pytest
-from src.handlers.threaded_message_handler import (
+from src.handlers.message_handler import (
     ack_message,
     nack_message,
     process_message_work,
@@ -65,7 +65,7 @@ class TestThreadSafeAcknowledgment:
 class TestMessageProcessingWork:
     """Test the core message processing work function."""
     
-    @patch('src.handlers.threaded_message_handler.handle_tweet_event')
+    @patch('src.handlers.message_handler.handle_tweet_event')
     def test_process_valid_message_with_token(self, mock_handle_tweet):
         """Test processing valid message that contains token details."""
         # Setup
@@ -114,7 +114,7 @@ class TestMessageProcessingWork:
         # Verify message was acknowledged
         channel.connection.add_callback_threadsafe.assert_called_once()
     
-    @patch('src.handlers.threaded_message_handler.handle_tweet_event')
+    @patch('src.handlers.message_handler.handle_tweet_event')
     def test_process_valid_message_without_token(self, mock_handle_tweet):
         """Test processing valid message that doesn't contain token details."""
         # Setup
@@ -170,7 +170,7 @@ class TestMessageProcessingWork:
         callback = channel.connection.add_callback_threadsafe.call_args[0][0]
         # We can't easily test the partial function, but we know it should be called
     
-    @patch('src.handlers.threaded_message_handler.handle_tweet_event')
+    @patch('src.handlers.message_handler.handle_tweet_event')
     def test_process_message_tweet_handler_exception(self, mock_handle_tweet):
         """Test processing message when tweet handler raises exception."""
         # Setup
@@ -199,7 +199,7 @@ class TestMessageProcessingWork:
 class TestOnMessageCallback:
     """Test the on_message callback function."""
     
-    @patch('src.handlers.threaded_message_handler.threading.Thread')
+    @patch('src.handlers.message_handler.threading.Thread')
     def test_on_message_creates_thread(self, mock_thread_class):
         """Test that on_message creates a processing thread."""
         # Setup
@@ -423,7 +423,7 @@ class TestIntegration:
         body = json.dumps(tweet_data).encode('utf-8')
         
         # Mock the tweet processing to avoid actual AI calls
-        with patch('src.handlers.threaded_message_handler.handle_tweet_event') as mock_handle:
+        with patch('src.handlers.message_handler.handle_tweet_event') as mock_handle:
             token_details = TokenDetails(
                 chain_id=1,
                 chain_name="Ethereum",

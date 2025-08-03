@@ -14,7 +14,7 @@ class TestAgentRetryWrapper:
         """Test initialization with default values."""
         wrapper = AgentRetryWrapper()
         
-        assert wrapper.max_retries == 4  # DEFAULT_AGENT_RETRIES
+        assert wrapper.max_retries == 3  # DEFAULT_AGENT_RETRIES
         assert wrapper.initial_delay == 1.0
 
     def test_init_custom_values(self):
