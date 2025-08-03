@@ -1,5 +1,6 @@
 """Configuration for sentiment analysis and token detection."""
 
+import os
 from dataclasses import dataclass
 from typing import Tuple
 
@@ -99,9 +100,14 @@ class SentimentAnalysisConfig:
 
 def get_sentiment_config() -> SentimentAnalysisConfig:
     """
-    Get sentiment analyzer configuration.
+    Get sentiment analyzer configuration from environment variables.
     
     Returns:
-        Configuration object with default values
+        Configuration object with values from environment variables or defaults
     """
-    return SentimentAnalysisConfig()
+    return SentimentAnalysisConfig(
+        model_name=os.getenv("SENTIMENT_MODEL_NAME", DEFAULT_MODEL_NAME),
+        firecrawl_mcp_server_url=os.getenv("FIRECRAWL_MCP_SERVER_URL", DEFAULT_FIRECRAWL_URL),
+        max_concurrent_analysis=int(os.getenv("MAX_CONCURRENT_ANALYSIS", str(DEFAULT_MAX_CONCURRENT))),
+        agent_retries=int(os.getenv("AGENT_RETRIES", str(DEFAULT_AGENT_RETRIES)))
+    )
