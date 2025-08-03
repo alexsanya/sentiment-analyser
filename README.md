@@ -2,7 +2,7 @@
 
 ![Cover picture](cover.png)
 
-An AI-powered sentiment analysis microservice for cryptocurrency token detection, built on RabbitMQ message processing architecture. The application specializes in analyzing tweets and social media content to detect new cryptocurrency token announcements using advanced AI agents, automatically publishing snipe actions for downstream trading systems.
+An AI-powered sentiment analysis microservice for cryptocurrency token detection, built on a threaded RabbitMQ message processing architecture. The application specializes in analyzing tweets and social media content to detect new cryptocurrency token announcements using advanced AI agents, automatically publishing snipe actions for downstream trading systems.
 
 ## Features
 
@@ -10,13 +10,14 @@ An AI-powered sentiment analysis microservice for cryptocurrency token detection
 - **Multi-Agent Architecture**: Specialized agents for text analysis, image OCR, and web scraping with result merging
 - **Automatic Snipe Actions**: Publishes structured snipe actions to `actions_to_take` queue when tokens are detected
 - **Blockchain Address Validation**: Supports Solana and EVM chains with comprehensive address validation
-- **RabbitMQ Message Processing**: Consumes tweets and publishes actions with schema validation and buffering
+- **Threaded RabbitMQ Processing**: High-throughput message processing with thread-per-message pattern for concurrent sentiment analysis
 - **Message Buffer System**: Thread-safe FIFO buffer prevents message loss during RabbitMQ outages
 - **RabbitMQ Connection Monitoring**: Automatic health checks and reconnection with configurable retry logic
 - **Data Transformation Pipeline**: Tweet standardization with datetime parsing and URL extraction
 - **Factory Pattern Architecture**: Clean dependency injection with no global state
 - **Comprehensive Observability**: Logfire integration with PydanticAI instrumentation and structured logging
 - **Comprehensive Testing**: 90%+ test coverage with integration tests for AI agents
+- **High Performance**: Thread-per-message processing enables concurrent sentiment analysis with optimal CPU utilization
 
 ## Technology Stack
 
@@ -34,18 +35,24 @@ An AI-powered sentiment analysis microservice for cryptocurrency token detection
 
 ### Prerequisites
 
+**Local Development:**
 - Python 3.12+
 - UV package manager
 - OpenAI API key (for PydanticAI agents)
 - RabbitMQ server (for message processing)
 - Optional: Firecrawl MCP server (for web scraping agent)
 
+**Docker Deployment:**
+- Docker and Docker Compose
+- OpenAI API key (for PydanticAI agents)
+- Optional: Firecrawl API key (for enhanced web scraping)
+
 ### Installation
 
 1. Clone the repository:
 ```bash
 git clone <repository-url>
-cd news_povered_trading
+cd tweets-notifier
 ```
 
 2. Install dependencies:
@@ -61,7 +68,11 @@ touch .env
 
 4. Run the application:
 ```bash
+# Local development
 python main.py
+
+# Or using Docker Compose (includes RabbitMQ and Firecrawl)
+docker-compose up -d
 ```
 
 ## Configuration
@@ -118,12 +129,12 @@ SERVICE_VERSION=0.1.0
 
 ## Architecture
 
-### AI-Powered Message Processing Design
+### Threaded AI-Powered Message Processing Design
 
-The system uses a **clean architecture with AI-powered sentiment analysis** and dependency injection:
+The system uses a **threaded architecture with AI-powered sentiment analysis** and dependency injection:
 
-- **Main Application** (`main.py`): Application orchestration and message consumption coordination
-- **Message Handler Factory** (`src/handlers/message_handler.py`): RabbitMQ message processing with dependency injection
+- **Main Application** (`main.py`): Application orchestration with threaded message processing for high throughput
+- **Threaded Message Handler** (`src/handlers/message_handler.py`): Thread-per-message RabbitMQ processing with dependency injection
 - **AI Agent System** (`src/core/agents/` package): PydanticAI agents for text, image, and web content analysis
 - **Sentiment Analyzer** (`src/core/sentiment_analyzer.py`): Agent orchestration and result merging
 - **MQ Subscriber** (`src/core/mq_subscriber.py`): RabbitMQ consumption and publishing with schema validation
@@ -135,7 +146,7 @@ The system uses a **clean architecture with AI-powered sentiment analysis** and 
 
 ### File Structure
 ```
-├── main.py                    # Application entry point for RabbitMQ message processing
+├── main.py                    # Application entry point with threaded RabbitMQ message processing
 ├── src/                       # Source code package
 │   ├── config/               # Configuration modules
 │   │   ├── logging_config.py # Structured logging configuration
@@ -155,7 +166,7 @@ The system uses a **clean architecture with AI-powered sentiment analysis** and 
 │   │   └── rabbitmq_monitor.py # RabbitMQ connection monitoring
 │   ├── handlers/             # Message handlers package
 │   │   ├── tweet.py         # Tweet message handler with transformation and sentiment analysis
-│   │   └── message_handler.py # RabbitMQ message handler factory with snipe action publishing
+│   │   └── message_handler.py # Threaded RabbitMQ message handler with thread-per-message processing
 │   └── models/               # Data models and schemas
 │       └── schemas.py       # Pydantic models for tokens, tweets, and snipe actions
 ├── tests/                    # Comprehensive test suite with AI agent integration tests
@@ -192,12 +203,14 @@ uv run pytest tests/test_message_buffer.py -v
 uv run pytest tests/test_tweet_handler.py -v
 uv run pytest tests/test_sentiment_analyzer.py -v
 uv run pytest tests/test_address_validators.py -v
+uv run pytest tests/test_message_handler.py -v
 
 # Run AI agent integration tests (requires OPENAI_API_KEY)
 OPENAI_API_KEY=your_key uv run pytest tests/integration/test_agents_integration.py -v
 
 # Run tests with coverage
 uv run pytest tests/test_mq_subscriber.py --cov=src.core.mq_subscriber --cov-report=term-missing
+uv run pytest tests/test_message_handler.py --cov=src.handlers.message_handler --cov-report=term-missing
 uv run pytest tests/test_sentiment_analyzer.py --cov=src.core.sentiment_analyzer --cov-report=term-missing
 
 # Skip integration tests (run only unit tests)
@@ -222,11 +235,16 @@ uv run pytest tests/integration/test_agents_integration.py --snapshot-update
 - **Queue Integration**: Publishes to configurable `actions_to_take` queue for downstream services
 - **Error Handling**: Comprehensive error handling with logging and buffering support
 
-### Message Processing Pipeline
-- **Factory Pattern**: Clean dependency injection using `create_message_handler()` factory
-- **Tweet Analysis**: Processes incoming tweets through AI sentiment analysis pipeline
+### Threaded Message Processing Pipeline
+- **Thread-per-Message**: Each message processed in dedicated thread for concurrent sentiment analysis
+- **High Throughput**: Multiple messages processed simultaneously without blocking
+- **Factory Pattern**: Clean dependency injection using `create_message_handler()` factory  
+- **Thread-Safe Operations**: Safe message acknowledgment using `connection.add_callback_threadsafe()`
+- **Tweet Analysis**: Processes incoming tweets through AI sentiment analysis pipeline without blocking
 - **Schema Validation**: Pydantic models for tweets, tokens, and snipe actions
 - **Data Transformation**: Tweet standardization with datetime parsing and URL extraction
+- **Graceful Shutdown**: Waits for all processing threads to complete during application shutdown
+- **QoS Configuration**: Configurable max concurrent threads to prevent system overload
 
 ### RabbitMQ Connection Monitoring
 - **Automatic Health Checks**: Periodic connection monitoring with configurable intervals
@@ -242,7 +260,7 @@ uv run pytest tests/integration/test_agents_integration.py --snapshot-update
 
 ## Testing
 
-Comprehensive test suite with **90%+ coverage** across **80+ tests**:
+Comprehensive test suite with **90%+ coverage** across **100+ tests**:
 
 ### Test Categories
 - **AI Agents**: Sentiment analysis orchestration, agent coordination, result merging
@@ -253,7 +271,7 @@ Comprehensive test suite with **90%+ coverage** across **80+ tests**:
 - **Message Buffer**: Thread safety, FIFO operations, integration (27 tests)
 - **Data Transformation**: Schema validation, datetime parsing, URL extraction (27 tests)
 - **Tweet Handler**: Message processing with sentiment analysis integration
-- **Message Handler**: Factory pattern and dependency injection testing
+- **Threaded Message Handler**: Thread-per-message processing pattern and factory testing (20 tests)
 
 ### Running Tests
 ```bash
@@ -335,6 +353,125 @@ Structured logs are automatically written to the `logs/` directory with rotation
 **Environment Control**: 
 - `ENVIRONMENT=development` - Console output with colors
 - `ENVIRONMENT=production` - JSON-formatted logs for analysis
+
+## Docker Deployment
+
+The application supports containerized deployment with Docker Compose for easy multi-service orchestration.
+
+### Docker Compose Architecture
+
+The `docker-compose.yml` defines a complete ecosystem with three services:
+
+#### Services Overview
+
+**1. RabbitMQ Message Broker**
+```yaml
+rabbitmq:
+  image: rabbitmq:3.13-management
+  ports:
+    - "5672:5672"   # AMQP protocol
+    - "15672:15672" # Management UI
+```
+- **Purpose**: Message broker for tweet processing and snipe action publishing
+- **Management UI**: Available at `http://localhost:15672` (admin/changeme)
+- **Persistence**: Uses named volume for message durability
+- **Health Checks**: Automated port connectivity validation
+
+**2. Firecrawl MCP Server**
+```yaml
+firecrawl:
+  image: node:18-alpine
+  command: npx -y firecrawl-mcp
+  ports:
+    - "3000:3000"   # MCP server endpoint
+```
+- **Purpose**: Web scraping service for FirecrawlAgent
+- **Integration**: Enables analysis of linked websites in tweets
+- **Optional**: Service can be disabled if web scraping is not needed
+
+**3. Sentiment Analyzer (Main Application)**
+```yaml
+sentiment-analyzer:
+  build: .
+  depends_on:
+    - rabbitmq
+    - firecrawl
+```
+- **Purpose**: Main threaded message processing application
+- **Dependencies**: Waits for RabbitMQ and Firecrawl to be healthy before starting
+- **Volumes**: Mounts `./logs` for persistent log access from host
+- **Environment**: All configuration passed via environment variables
+
+### Network Architecture
+
+**Custom Bridge Network** (`trading_network`):
+- **Isolation**: Services communicate securely within isolated network
+- **Service Discovery**: Automatic DNS resolution (e.g., `rabbitmq:5672`)
+- **Scalability**: Easy to add additional services to the network
+
+### Docker Commands
+
+```bash
+# Start all services in background
+docker-compose up -d
+
+# View logs for specific service
+docker-compose logs -f sentiment-analyzer
+docker-compose logs -f rabbitmq
+docker-compose logs -f firecrawl
+
+# View logs for all services
+docker-compose logs -f
+
+# Rebuild and restart services after code changes
+docker-compose up -d --build
+
+# Stop all services
+docker-compose down
+
+# Stop services and remove volumes (clean slate)
+docker-compose down -v
+
+# Access RabbitMQ Management UI
+# Navigate to http://localhost:15672
+# Default credentials: admin/changeme (configurable via .env)
+```
+
+### Environment Integration
+
+All configuration from your `.env` file is automatically passed to containers:
+
+```env
+# Example .env for Docker deployment
+ENVIRONMENT=production
+OPENAI_API_KEY=your_openai_api_key_here
+RABBITMQ_USERNAME=admin
+RABBITMQ_PASSWORD=changeme
+FIRECRAWL_API_KEY=your_firecrawl_key_here  # Optional
+LOGFIRE_TOKEN=your_logfire_token_here      # Optional
+```
+
+### Service Health Monitoring
+
+Each service includes health checks:
+- **RabbitMQ**: Port connectivity validation every 10 seconds
+- **Firecrawl**: HTTP endpoint availability every 15 seconds  
+- **Sentiment Analyzer**: Python process validation every 30 seconds
+
+### Production Deployment
+
+For production use:
+1. **Update credentials** in `.env` file
+2. **Set ENVIRONMENT=production** for JSON logging
+3. **Configure log rotation** for the mounted logs directory
+4. **Monitor health checks** for service availability
+5. **Use reverse proxy** for external access if needed
+
+### Volume Management
+
+- **`rabbitmq_data`**: Named volume for RabbitMQ message persistence
+- **`./logs`**: Bind mount for accessing application logs from host
+- **Data persistence**: Messages and logs survive container restarts
 
 ## Contributing
 
