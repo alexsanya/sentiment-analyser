@@ -1,3 +1,11 @@
+"""
+Main application entry point with threaded message processing.
+
+This application uses a threaded message handler pattern to handle potentially 
+long-running sentiment analysis operations in separate threads while maintaining 
+high message consumption throughput.
+"""
+
 import json
 import os
 import signal
@@ -13,8 +21,10 @@ from src.handlers import create_message_handler
 # Initialize module-level logger
 setup_logging()  # Auto-detects environment
 logger = get_logger(__name__)
-# Global shutdown flag
+
+# Global shutdown flag and processor reference
 shutdown_requested = False
+message_processor: Optional[Any] = None
 
 
 def initialize_rabbitmq() -> MQSubscriber:
@@ -45,6 +55,7 @@ def initialize_rabbitmq() -> MQSubscriber:
         )
         raise SystemExit(1)
 
+
 def initialize_rabbitmq_monitor(mq_subscriber: MQSubscriber) -> Optional[RabbitMQConnectionMonitor]:
     """Initialize RabbitMQ connection monitor if enabled."""
     if os.getenv("RABBITMQ_MONITOR_ENABLED", "true").lower() == "true":
@@ -63,12 +74,13 @@ def shutdown_handler(signum: int, frame: Any) -> None:
     logger.info("Shutdown signal received, cleaning up...")
     shutdown_requested = True
 
+
 def main() -> None:
-    """Main application entry point."""
-    global shutdown_requested
+    """Main application entry point with threaded message processing."""
+    global shutdown_requested, message_processor
     
     environment = os.getenv("ENVIRONMENT", "development")
-    logger.info("Starting RabbitMQ message processor", environment=environment)
+    logger.info("Starting threaded RabbitMQ message processor", environment=environment)
     
     # Initialize and test RabbitMQ connection at startup
     mq_subscriber = initialize_rabbitmq()
@@ -82,16 +94,36 @@ def main() -> None:
     logger.info("Signal handlers registered for graceful shutdown")
     
     try:
-        # Create message handler with MQSubscriber dependency injected
-        handler = create_message_handler(mq_subscriber)
+        # Create threaded message processor
+        message_processor = create_message_handler(mq_subscriber)
         
-        # Set up message handler and start consuming
-        mq_subscriber.set_message_handler(handler)
-        mq_subscriber.start_consuming()
+        # Start threaded message processing
+        message_processor.start_processing()
         
-        logger.info("Application started and consuming messages. Press Ctrl+C to shutdown.")
+        # Configure basic QOS for the consumer channel to limit unacknowledged messages
+        # This prevents overwhelming the system with too many concurrent threads
+        if mq_subscriber._consumer_channel:
+            mq_subscriber._consumer_channel.basic_qos(prefetch_count=10)
+            logger.info("Consumer QoS configured - max 10 unacknowledged messages")
+        
+        logger.info("Threaded message processing started. Press Ctrl+C to shutdown.")
+        
+        # Main loop - monitor status and handle shutdown
+        status_log_interval = 60  # Log status every 60 seconds
+        last_status_log = 0
         
         while not shutdown_requested:
+            current_time = time.time()
+            
+            # Periodically log processor status
+            if current_time - last_status_log >= status_log_interval:
+                status = message_processor.get_status()
+                logger.info(
+                    "Threaded processor status",
+                    **status
+                )
+                last_status_log = current_time
+            
             time.sleep(1)
             
     except KeyboardInterrupt:
@@ -101,11 +133,22 @@ def main() -> None:
     finally:
         logger.info("Application shutting down")
         
-        # Cleanup resources
+        # Cleanup resources in proper order
+        if message_processor:
+            logger.info("Stopping threaded message processor...")
+            # Give threads reasonable time to complete processing
+            message_processor.stop_processing(timeout=30.0)
+        
         if connection_monitor:
+            logger.info("Stopping connection monitor...")
             connection_monitor.stop()
+        
         if mq_subscriber:
+            logger.info("Closing MQ subscriber...")
             mq_subscriber.close()
+        
+        logger.info("Application shutdown complete")
+
 
 if __name__ == "__main__":
     load_dotenv()

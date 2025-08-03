@@ -34,7 +34,7 @@ This is an AI-powered sentiment analysis microservice for cryptocurrency token d
 ## Development Commands
 
 ```bash
-# Run the application
+# Run the application (threaded message processing)
 python main.py
 
 # Install dependencies
@@ -82,6 +82,12 @@ uv run pytest tests/test_tweet_handler.py
 # Run tweet handler tests with coverage
 uv run pytest tests/test_tweet_handler.py --cov=src.handlers.tweet --cov-report=term-missing
 
+# Run message handler tests
+uv run pytest tests/test_message_handler.py
+
+# Run message handler tests with coverage
+uv run pytest tests/test_message_handler.py --cov=src.handlers.message_handler --cov-report=term-missing
+
 # Test message handler functionality (requires mocking)
 # Note: Message handler tests are included in integration testing
 
@@ -98,6 +104,12 @@ uv run pytest tests/test_address_validators.py -v
 
 # Run address validation tests with coverage
 uv run pytest tests/test_address_validators.py --cov=src.core.utils.address_validators --cov-report=term-missing
+
+# Run retry wrapper tests
+uv run pytest tests/test_retry_wrapper.py -v
+
+# Run retry wrapper tests with coverage
+uv run pytest tests/test_retry_wrapper.py --cov=src.core.agents.retry_wrapper --cov-report=term-missing
 
 # Agent Integration Tests (require OPENAI_API_KEY)
 
@@ -125,7 +137,7 @@ uv run pytest -m "not integration" -v
 uv run pytest tests/integration/ --cov=src.core.agents --cov-report=term-missing
 
 # Run all sentiment analysis related tests
-uv run pytest tests/test_sentiment_analyzer.py tests/test_address_validators.py tests/integration/test_agents_integration.py -v
+uv run pytest tests/test_sentiment_analyzer.py tests/test_address_validators.py tests/test_retry_wrapper.py tests/integration/test_agents_integration.py -v
 
 # Docker Development Commands
 
@@ -158,14 +170,14 @@ docker-compose down -v
 
 **AI-powered sentiment analysis architecture** for cryptocurrency token detection:
 
-- **Main Application** (`main.py`): Application orchestration and message consumption coordination with clean separation of concerns
+- **Main Application** (`main.py`): Application orchestration and threaded message consumption for high-throughput processing
 - **Sentiment Analyzer** (`src/core/sentiment_analyzer.py`): Main sentiment analysis orchestration with agent coordination
 - **AI Agents** (`src/core/agents/` package): PydanticAI-powered agents for text, image, and web content analysis
 - **MQ Subscriber** (`src/core/mq_subscriber.py`): RabbitMQ message consumption and publishing service with schema validation and automatic buffering
 - **Data Transformation** (`src/core/transformation.py`): Tweet data standardization and format conversion pipeline
 - **Schema Validation** (`src/models/schemas.py`): Pydantic models for data validation, token details, sentiment analysis results, and snipe action messages
 - **RabbitMQ Monitor** (`src/core/rabbitmq_monitor.py`): Automatic connection monitoring with health checks and reconnection logic
-- **Message Handlers** (`src/handlers/` package): Modular message processing with sentiment analysis integration and snipe action publishing
+- **Message Handlers** (`src/handlers/` package): Threaded message processing with sentiment analysis integration and snipe action publishing
 - **Address Validators** (`src/core/utils/` package): Blockchain address validation utilities for Solana and EVM chains
 - **Configuration Management** (`src/config/` package): Structured logging, Logfire observability, and sentiment analysis configuration
 
@@ -184,13 +196,45 @@ docker-compose down -v
 
 **Message Handlers** (process incoming message content):
 - `src/handlers/tweet.py`: Tweet message processing with transformation pipeline, data validation, and sentiment analysis integration
-- `src/handlers/message_handler.py`: RabbitMQ message handler factory with dependency injection and snipe action publishing
+- `src/handlers/message_handler.py`: Threaded RabbitMQ message handler with thread-per-message processing for long-running sentiment analysis operations
 
 **Handler Package** (`src/handlers/__init__.py`): Centralized exports for message handlers and factory functions
 
+### Threaded Message Processing Architecture
+
+**Default Processing Pattern** (based on Pika threaded consumer example):
+
+The application uses a thread-per-message processing pattern optimized for handling potentially long-running sentiment analysis operations:
+
+**Key Features:**
+- **Thread-per-Message**: Each incoming message spawns a dedicated processing thread
+- **Thread-Safe Acknowledgment**: Uses `connection.add_callback_threadsafe()` for safe message acknowledgment from worker threads
+- **Concurrent Processing**: Multiple messages can be processed simultaneously without blocking the consumer
+- **Graceful Shutdown**: Waits for all processing threads to complete during application shutdown
+- **Thread Management**: Automatic cleanup of finished threads and status monitoring
+
+**Processing Flow:**
+1. **Message Reception**: Consumer receives message and immediately spawns processing thread
+2. **Thread Processing**: Worker thread performs sentiment analysis (potentially taking seconds)
+3. **Safe Acknowledgment**: Uses thread-safe callback to acknowledge message completion
+4. **Concurrent Operations**: Multiple threads can process different messages simultaneously
+5. **Resource Cleanup**: Finished threads are automatically cleaned up
+
+**ThreadedMessageProcessor Class:**
+- **Processor Management**: Coordinates thread lifecycle and provides status monitoring
+- **Consumer Integration**: Seamlessly integrates with existing MQSubscriber infrastructure
+- **Configuration**: Supports QoS settings to limit concurrent processing load
+- **Monitoring**: Real-time status reporting for active threads and processor state
+
+**Performance Benefits:**
+- **Higher Throughput**: Multiple messages processed concurrently instead of sequentially
+- **Better Resource Utilization**: CPU cores can be fully utilized during AI agent processing
+- **Reduced Latency**: Fast messages aren't blocked by slow sentiment analysis operations
+- **Scalability**: Natural scaling with available CPU cores and memory
+
 ### File Structure
 ```
-├── main.py                    # Application entry point for RabbitMQ message processing
+├── main.py                    # Application entry point with threaded RabbitMQ message processing
 ├── src/                       # Source code package
 │   ├── __init__.py           # Package initialization
 │   ├── config/               # Configuration modules
@@ -204,7 +248,8 @@ docker-compose down -v
 │   │   │   ├── __init__.py  # Agent exports
 │   │   │   ├── text_search_agent.py # Text content analysis agent
 │   │   │   ├── image_search_agent.py # Image text extraction agent
-│   │   │   └── firecrawl_agent.py # Web scraping agent
+│   │   │   ├── firecrawl_agent.py # Web scraping agent
+│   │   │   └── retry_wrapper.py # Exponential backoff retry wrapper for agents
 │   │   ├── utils/           # Utility functions
 │   │   │   ├── __init__.py  # Utility exports
 │   │   │   └── address_validators.py # Blockchain address validation
@@ -216,7 +261,7 @@ docker-compose down -v
 │   ├── handlers/             # Message handlers package
 │   │   ├── __init__.py      # Package exports
 │   │   ├── tweet.py         # Tweet message handler with transformation and sentiment analysis
-│   │   └── message_handler.py # RabbitMQ message handler factory with snipe action publishing
+│   │   └── message_handler.py # Threaded RabbitMQ message handler with thread-per-message processing
 │   └── models/               # Data models and schemas
 │       ├── __init__.py      # Package exports
 │       └── schemas.py       # Pydantic models for data validation, token details, and sentiment analysis
@@ -234,8 +279,10 @@ docker-compose down -v
 │   ├── test_message_buffer.py # MessageBuffer tests
 │   ├── test_transformation.py # Transformation pipeline tests
 │   ├── test_tweet_handler.py # Tweet handler tests
+│   ├── test_message_handler.py # Message handler tests
 │   ├── test_sentiment_analyzer.py # Sentiment analyzer tests
 │   ├── test_address_validators.py # Address validation tests
+│   ├── test_retry_wrapper.py # Agent retry wrapper tests
 │   └── test_main_rabbitmq.py # Main application integration tests
 ├── examples/                # Example files and sample data
 │   ├── tweet-sample.json   # Sample tweet data for testing and development
@@ -915,6 +962,12 @@ uv run pytest test_websocket_manager.py --cov=src.core.websocket_manager --cov-r
   - Solana address Base58 decoding and length validation
   - Edge cases for malformed addresses and invalid formats
   - Automatic blockchain type detection based on address format
+- **Retry Wrapper Tests**: Agent retry logic comprehensive testing with exponential backoff
+  - Progressive delay validation (1s, 2s, 4s, 8s) for retry attempts
+  - TokenDetails success conditions and non-TokenDetails retry behavior
+  - Maximum retry limits and timeout handling
+  - Exception propagation and error recovery testing
+  - Concurrent execution and thread safety validation
 
 ## Logging
 
@@ -981,12 +1034,13 @@ The application demonstrates several architectural best practices:
 - **Automatic Token Detection**: Seamless integration between AI analysis and action publishing
 - **Message-Driven Architecture**: Asynchronous processing with RabbitMQ message queues
 - **Fault Tolerance**: Built-in buffering, reconnection, and error handling mechanisms
+- **Intelligent Retry Logic**: Exponential backoff retry wrapper for AI agents with progressive delays (1s, 2s, 4s, 8s)
 - **Observability**: Comprehensive logging and tracing throughout the system
 
 ### Monitoring & Observability
 - **Structured Logging**: All events and errors logged with contextual metadata
 - **Message Logging**: Incoming messages are logged with routing key and metadata
-- **Agent Monitoring**: AI agent execution tracking, performance metrics, and result logging
+- **Agent Monitoring**: AI agent execution tracking, performance metrics, retry attempt logging, and result tracking with exponential backoff delays
 - **Connection Monitoring**: Automatic health checks and reconnection logging
 - **Consumer Status**: Real-time monitoring of consumer thread status
 - **Logfire Integration**: Comprehensive observability for PydanticAI agents with execution traces, performance metrics, and error tracking

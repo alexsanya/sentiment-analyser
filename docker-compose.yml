@@ -3,8 +3,9 @@ version: '3.8'
 services:
   rabbitmq:
     image: rabbitmq:3.13-management  # Includes management plugin
-    container_name: rabbitmq
+    container_name: rabbitmq-sentiment-analyzer
     hostname: rabbitmq
+    restart: unless-stopped
     ports:
       - "5672:5672"   # AMQP (for Python clients)
       - "15672:15672" # Management UI (HTTP)
@@ -22,20 +23,38 @@ services:
     networks:
       - trading_network
 
-  news-watcher:
+  firecrawl:
+    image: node:18-alpine
+    container_name: firecrawl
+    command: npx -y firecrawl-mcp
+    restart: unless-stopped
+    ports:
+      - "3000:3000"   # MCP server port
+    environment:
+      FIRECRAWL_API_KEY: ${FIRECRAWL_API_KEY}
+      SSE_LOCAL: true
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:3000/sse || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - trading_network
+
+  sentiment-analyzer:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: news-watcher
+    container_name: sentiment-analyzer
     depends_on:
       rabbitmq:
+        condition: service_healthy
+      firecrawl:
         condition: service_healthy
     volumes:
       - ./logs:/app/logs  # Mount logs directory for persistence
     environment:
-      # Twitter API Configuration
-      TWITTERAPI_KEY: ${TWITTERAPI_KEY}
-      
       # Application Environment
       ENVIRONMENT: ${ENVIRONMENT:-development}
       
@@ -43,6 +62,8 @@ services:
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: ${RABBITMQ_PORT:-5672}
       RABBITMQ_QUEUE: ${RABBITMQ_QUEUE:-tweet_events}
+      RABBITMQ_CONSUME_QUEUE: ${RABBITMQ_CONSUME_QUEUE:-tweet_events}
+      ACTIONS_QUEUE_NAME: ${ACTIONS_QUEUE_NAME:-actions_to_take}
       RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-admin}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-changeme}
       
@@ -55,6 +76,20 @@ services:
       # Message Buffer Configuration
       MESSAGE_BUFFER_ENABLED: ${MESSAGE_BUFFER_ENABLED:-true}
       MESSAGE_BUFFER_SIZE: ${MESSAGE_BUFFER_SIZE:-10}
+      
+      # Sentiment Analysis Configuration
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      SENTIMENT_MODEL_NAME: ${SENTIMENT_MODEL_NAME:-openai:gpt-4o}
+      FIRECRAWL_MCP_SERVER_URL: http://firecrawl:3000/sse
+      MAX_CONCURRENT_ANALYSIS: ${MAX_CONCURRENT_ANALYSIS:-5}
+      AGENT_RETRIES: ${AGENT_RETRIES:-4}
+      
+      # Logfire Configuration
+      LOGFIRE_ENABLED: ${LOGFIRE_ENABLED:-true}
+      LOGFIRE_TOKEN: ${LOGFIRE_TOKEN}
+      LOGFIRE_SERVICE_NAME: ${LOGFIRE_SERVICE_NAME:-sentiment-analyzer}
+      LOGFIRE_ENVIRONMENT: ${LOGFIRE_ENVIRONMENT:-${ENVIRONMENT:-development}}
+      SERVICE_VERSION: ${SERVICE_VERSION:-0.1.0}
     healthcheck:
       test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
       interval: 30s
