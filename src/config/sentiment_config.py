@@ -6,7 +6,7 @@ from typing import Tuple
 
 
 # Agent retry configuration
-DEFAULT_AGENT_RETRIES = 4
+DEFAULT_AGENT_RETRIES = 3
 
 # Default configuration values
 DEFAULT_MODEL_NAME = "openai:gpt-4o"

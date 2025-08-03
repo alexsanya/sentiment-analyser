@@ -34,8 +34,11 @@ This is an AI-powered sentiment analysis microservice for cryptocurrency token d
 ## Development Commands
 
 ```bash
-# Run the application
+# Run the application (original single-threaded)
 python main.py
+
+# Run the application (threaded message processing)
+python main_threaded.py
 
 # Install dependencies
 uv sync
@@ -81,6 +84,12 @@ uv run pytest tests/test_tweet_handler.py
 
 # Run tweet handler tests with coverage
 uv run pytest tests/test_tweet_handler.py --cov=src.handlers.tweet --cov-report=term-missing
+
+# Run threaded message handler tests
+uv run pytest tests/test_threaded_message_handler.py
+
+# Run threaded message handler tests with coverage
+uv run pytest tests/test_threaded_message_handler.py --cov=src.handlers.threaded_message_handler --cov-report=term-missing
 
 # Test message handler functionality (requires mocking)
 # Note: Message handler tests are included in integration testing
@@ -165,6 +174,7 @@ docker-compose down -v
 **AI-powered sentiment analysis architecture** for cryptocurrency token detection:
 
 - **Main Application** (`main.py`): Application orchestration and message consumption coordination with clean separation of concerns
+- **Threaded Main Application** (`main_threaded.py`): Enhanced application entry point using threaded message processing for improved throughput
 - **Sentiment Analyzer** (`src/core/sentiment_analyzer.py`): Main sentiment analysis orchestration with agent coordination
 - **AI Agents** (`src/core/agents/` package): PydanticAI-powered agents for text, image, and web content analysis
 - **MQ Subscriber** (`src/core/mq_subscriber.py`): RabbitMQ message consumption and publishing service with schema validation and automatic buffering
@@ -172,6 +182,7 @@ docker-compose down -v
 - **Schema Validation** (`src/models/schemas.py`): Pydantic models for data validation, token details, sentiment analysis results, and snipe action messages
 - **RabbitMQ Monitor** (`src/core/rabbitmq_monitor.py`): Automatic connection monitoring with health checks and reconnection logic
 - **Message Handlers** (`src/handlers/` package): Modular message processing with sentiment analysis integration and snipe action publishing
+- **Threaded Message Handler** (`src/handlers/threaded_message_handler.py`): Thread-per-message processing pattern for handling long-running sentiment analysis operations
 - **Address Validators** (`src/core/utils/` package): Blockchain address validation utilities for Solana and EVM chains
 - **Configuration Management** (`src/config/` package): Structured logging, Logfire observability, and sentiment analysis configuration
 
@@ -191,12 +202,46 @@ docker-compose down -v
 **Message Handlers** (process incoming message content):
 - `src/handlers/tweet.py`: Tweet message processing with transformation pipeline, data validation, and sentiment analysis integration
 - `src/handlers/message_handler.py`: RabbitMQ message handler factory with dependency injection and snipe action publishing
+- `src/handlers/threaded_message_handler.py`: Thread-per-message processing pattern for handling long-running sentiment analysis operations
 
 **Handler Package** (`src/handlers/__init__.py`): Centralized exports for message handlers and factory functions
+
+### Threaded Message Processing Architecture
+
+**Enhanced Processing Pattern** (based on Pika threaded consumer example):
+
+The threaded message handler implements a thread-per-message processing pattern optimized for handling potentially long-running sentiment analysis operations:
+
+**Key Features:**
+- **Thread-per-Message**: Each incoming message spawns a dedicated processing thread
+- **Thread-Safe Acknowledgment**: Uses `connection.add_callback_threadsafe()` for safe message acknowledgment from worker threads
+- **Concurrent Processing**: Multiple messages can be processed simultaneously without blocking the consumer
+- **Graceful Shutdown**: Waits for all processing threads to complete during application shutdown
+- **Thread Management**: Automatic cleanup of finished threads and status monitoring
+
+**Processing Flow:**
+1. **Message Reception**: Consumer receives message and immediately spawns processing thread
+2. **Thread Processing**: Worker thread performs sentiment analysis (potentially taking seconds)
+3. **Safe Acknowledgment**: Uses thread-safe callback to acknowledge message completion
+4. **Concurrent Operations**: Multiple threads can process different messages simultaneously
+5. **Resource Cleanup**: Finished threads are automatically cleaned up
+
+**ThreadedMessageProcessor Class:**
+- **Processor Management**: Coordinates thread lifecycle and provides status monitoring
+- **Consumer Integration**: Seamlessly integrates with existing MQSubscriber infrastructure
+- **Configuration**: Supports QoS settings to limit concurrent processing load
+- **Monitoring**: Real-time status reporting for active threads and processor state
+
+**Performance Benefits:**
+- **Higher Throughput**: Multiple messages processed concurrently instead of sequentially
+- **Better Resource Utilization**: CPU cores can be fully utilized during AI agent processing
+- **Reduced Latency**: Fast messages aren't blocked by slow sentiment analysis operations
+- **Scalability**: Natural scaling with available CPU cores and memory
 
 ### File Structure
 ```
 ├── main.py                    # Application entry point for RabbitMQ message processing
+├── main_threaded.py           # Enhanced application entry point with threaded message processing
 ├── src/                       # Source code package
 │   ├── __init__.py           # Package initialization
 │   ├── config/               # Configuration modules
@@ -223,7 +268,8 @@ docker-compose down -v
 │   ├── handlers/             # Message handlers package
 │   │   ├── __init__.py      # Package exports
 │   │   ├── tweet.py         # Tweet message handler with transformation and sentiment analysis
-│   │   └── message_handler.py # RabbitMQ message handler factory with snipe action publishing
+│   │   ├── message_handler.py # RabbitMQ message handler factory with snipe action publishing
+│   │   └── threaded_message_handler.py # Thread-per-message processing for long-running operations
 │   └── models/               # Data models and schemas
 │       ├── __init__.py      # Package exports
 │       └── schemas.py       # Pydantic models for data validation, token details, and sentiment analysis
@@ -241,6 +287,7 @@ docker-compose down -v
 │   ├── test_message_buffer.py # MessageBuffer tests
 │   ├── test_transformation.py # Transformation pipeline tests
 │   ├── test_tweet_handler.py # Tweet handler tests
+│   ├── test_threaded_message_handler.py # Threaded message handler tests
 │   ├── test_sentiment_analyzer.py # Sentiment analyzer tests
 │   ├── test_address_validators.py # Address validation tests
 │   ├── test_retry_wrapper.py # Agent retry wrapper tests
