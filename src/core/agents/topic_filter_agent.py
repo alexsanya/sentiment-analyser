@@ -1,8 +1,11 @@
 """Topic filter agent for Putin-Trump peace talks detection."""
 
+import os
 import time
 from typing import cast
 from pydantic_ai import Agent
+from pydantic_ai.models.openai import OpenAIModel
+from pydantic_ai.providers.openrouter import OpenRouterProvider
 
 from ...models.schemas import TopicFilter
 from ...config.logging_config import get_logger
@@ -37,15 +40,17 @@ class TopicFilterAgent:
     A PydanticAI agent that analyzes text to determine if it relates to Putin-Trump peace talks
     """
     
-    def __init__(self, model_name: str = "openai:gpt-4o"):
+    def __init__(self):
         """
-        Initialize the agent
+        Initialize the agent with Grok-4 model via OpenRouter
+        """
+        model = OpenAIModel(
+            'x-ai/grok-4',
+            provider=OpenRouterProvider(api_key=os.getenv("OPENROUTER_API_KEY")),
+        )
         
-        Args:
-            model_name: The LLM model to use (default: gpt-4o)
-        """
         self.agent = Agent[None, TopicFilter](  # type: ignore[call-overload]
-            model=model_name,
+            model=model,
             result_type=TopicFilter,
             retries=0,  # Disable PydanticAI retries, use our custom retry wrapper
             system_prompt=TOPIC_FILTER_PROMPT
