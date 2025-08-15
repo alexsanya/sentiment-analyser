@@ -669,9 +669,17 @@ TopicAnalysisResult = Union[TopicFilter, AlignmentData]
 
 #### Action Schemas
 ```python
+class TradeActionParams(BaseModel):
+    pair: str                           # Trading pair (e.g., "ETHUSDT")
+    side: str                           # Trade side (e.g., "long")
+    leverage: int                       # Leverage multiplier
+    margin_usd: int                     # Margin amount in USD
+    take_profit_percent: int            # Take profit percentage
+    stop_loss_percent: int              # Stop loss percentage
+
 class TradeAction(BaseModel):
-    action: str = "trade"                # Action type identifier
-    params: TradeActionParams           # Trading parameters (currently empty)
+    action: str = "trade"               # Action type identifier
+    params: TradeActionParams           # Trading parameters with leverage and risk management
 ```
 
 ### Agent Orchestration
@@ -739,15 +747,23 @@ When topic analysis detects relevant Putin-Trump content, the system generates t
 ```json
 {
   "action": "trade",
-  "params": {}
+  "params": {
+    "pair": "ETHUSDT",
+    "side": "long",
+    "leverage": 7,
+    "margin_usd": 500,
+    "take_profit_percent": 20,
+    "stop_loss_percent": 12
+  }
 }
 ```
 
-**Score-Based Action Logic** (currently mock implementation):
-- **1-3**: Conservative/defensive trading strategies
-- **4-7**: Moderate trading approaches
-- **8-10**: Aggressive/optimistic positions
-- **N/A**: Default action for unclear sentiment
+**Score-Based Action Logic**:
+- **Score < 6**: No trade action published (below threshold)
+- **Score 6-7**: Moderate trading with `leverage=5`, `margin_usd=300`
+- **Score > 7**: Aggressive trading with `leverage=7`, `margin_usd=500`
+- **All trades**: Fixed parameters - `pair="ETHUSDT"`, `side="long"`, `take_profit_percent=20`, `stop_loss_percent=12`
+- **Score N/A or None**: No trade action published
 
 ### Configuration Control
 
