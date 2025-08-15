@@ -53,6 +53,20 @@ class TradeAction(BaseModel):
     params: TradeActionParams = Field(..., description="Trade action parameters")
 
 
+class NotifyActionParams(BaseModel):
+    """Parameters for notify action"""
+    source: str = Field(..., description="Author name from tweet message")
+    text: str = Field(..., description="Text content from twitter message")
+    createdAt: int = Field(..., description="Tweet creation timestamp")
+    alignment_score: Optional[int] = Field(None, description="Alignment score from topic sentiment analysis")
+
+
+class NotifyAction(BaseModel):
+    """Action message for notifying about topic-analyzed tweets"""
+    action: str = Field("notify", description="Action type")
+    params: NotifyActionParams = Field(..., description="Notify action parameters")
+
+
 class TopicFilter(BaseModel):
     """Whether this is related to Trump/Putin meeting"""
     topic_match: bool = Field(description="Whether this news match the topic (Yes or No)")
