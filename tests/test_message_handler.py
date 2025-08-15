@@ -13,7 +13,7 @@ from src.handlers.message_handler import (
     ThreadedMessageProcessor,
     create_threaded_message_handler
 )
-from src.models.schemas import TokenDetails, TweetOutput
+from src.models.schemas import TokenDetails, TweetOutput, AlignmentData, AnalysisResult, TweetProcessingResult, DataSource
 
 
 class TestThreadSafeAcknowledgment:
@@ -79,17 +79,21 @@ class TestMessageProcessingWork:
             chain_id=1,
             chain_name="Ethereum",
             token_address="0x742d35Cc6765C0532575f5A2c0a078Df8a2D4e5e",
-            is_release=True
+            is_release=True,
+            chain_defined_explicitly=True,
+            definition_fragment="Ethereum"
         )
         tweet_output = TweetOutput(
-            data_source={"name": "Twitter", "author_name": "test", "author_id": "123"},
+            data_source=DataSource(name="Twitter", author_name="test", author_id="123"),
             createdAt=1640995200,
             text="Test tweet",
             media=[],
             links=[],
             sentiment_analysis=token_details
         )
-        mock_handle_tweet.return_value = tweet_output
+        analysis_result = AnalysisResult.token_detection(token_details)
+        processing_result = TweetProcessingResult(tweet_output=tweet_output, analysis=analysis_result)
+        mock_handle_tweet.return_value = processing_result
         
         # Mock successful publish
         mq_subscriber.publish.return_value = True
@@ -115,6 +119,54 @@ class TestMessageProcessingWork:
         channel.connection.add_callback_threadsafe.assert_called_once()
     
     @patch('src.handlers.message_handler.handle_tweet_event')
+    def test_process_valid_message_with_alignment_data(self, mock_handle_tweet):
+        """Test processing valid message that contains alignment data for trade action."""
+        # Setup
+        channel = Mock()
+        channel.connection = Mock()
+        delivery_tag = 123
+        mq_subscriber = Mock()
+        
+        # Mock tweet processing to return alignment data (topic sentiment)
+        alignment_data = AlignmentData(
+            score=8,
+            explanation="High alignment between Trump and Putin noted"
+        )
+        tweet_output = TweetOutput(
+            data_source=DataSource(name="Twitter", author_name="test", author_id="123"),
+            createdAt=1640995200,
+            text="Test tweet about peace talks",
+            media=[],
+            links=[],
+            sentiment_analysis=None
+        )
+        analysis_result = AnalysisResult.topic_sentiment(alignment_data)
+        processing_result = TweetProcessingResult(tweet_output=tweet_output, analysis=analysis_result)
+        mock_handle_tweet.return_value = processing_result
+        
+        # Mock successful publish
+        mq_subscriber.publish.return_value = True
+        
+        # Create test message
+        tweet_data = {"text": "Trump and Putin reach agreement", "user": {"screen_name": "test"}}
+        body = json.dumps(tweet_data).encode('utf-8')
+        
+        # Execute
+        process_message_work(channel, delivery_tag, body, mq_subscriber)
+        
+        # Verify tweet processing was called
+        mock_handle_tweet.assert_called_once_with(tweet_data)
+        
+        # Verify trade action was published
+        mq_subscriber.publish.assert_called_once()
+        published_call = mq_subscriber.publish.call_args
+        published_action = published_call[0][0]  # First positional argument
+        assert published_action.action == "trade"
+        
+        # Verify message was acknowledged
+        channel.connection.add_callback_threadsafe.assert_called_once()
+    
+    @patch('src.handlers.message_handler.handle_tweet_event')
     def test_process_valid_message_without_token(self, mock_handle_tweet):
         """Test processing valid message that doesn't contain token details."""
         # Setup
@@ -125,14 +177,16 @@ class TestMessageProcessingWork:
         
         # Mock tweet processing to return no token
         tweet_output = TweetOutput(
-            data_source={"name": "Twitter", "author_name": "test", "author_id": "123"},
+            data_source=DataSource(name="Twitter", author_name="test", author_id="123"),
             createdAt=1640995200,
             text="Test tweet",
             media=[],
             links=[],
             sentiment_analysis=None
         )
-        mock_handle_tweet.return_value = tweet_output
+        analysis_result = AnalysisResult.no_analysis()
+        processing_result = TweetProcessingResult(tweet_output=tweet_output, analysis=analysis_result)
+        mock_handle_tweet.return_value = processing_result
         
         # Create test message
         tweet_data = {"text": "Regular tweet", "user": {"screen_name": "test"}}
@@ -212,7 +266,7 @@ class TestOnMessageCallback:
         body = b"test message"
         
         mq_subscriber = Mock()
-        threads = []
+        threads: list[threading.Thread] = []
         args = (threads, mq_subscriber)
         
         # Mock thread instance
@@ -428,17 +482,21 @@ class TestIntegration:
                 chain_id=1,
                 chain_name="Ethereum",
                 token_address="0x742d35Cc6765C0532575f5A2c0a078Df8a2D4e5e",
-                is_release=True
+                is_release=True,
+                chain_defined_explicitly=True,
+                definition_fragment="Ethereum"
             )
             tweet_output = TweetOutput(
-                data_source={"name": "Twitter", "author_name": "test", "author_id": "123"},
+                data_source=DataSource(name="Twitter", author_name="test", author_id="123"),
                 createdAt=1640995200,
                 text="Test tweet",
                 media=[],
                 links=[],
                 sentiment_analysis=token_details
             )
-            mock_handle.return_value = tweet_output
+            analysis_result = AnalysisResult.token_detection(token_details)
+            processing_result = TweetProcessingResult(tweet_output=tweet_output, analysis=analysis_result)
+            mock_handle.return_value = processing_result
             
             # Execute message handling
             handler(channel, method, properties, body)

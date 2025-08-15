@@ -2,7 +2,7 @@
 
 import asyncio
 import time
-from typing import Callable, Awaitable, cast
+from typing import Callable, Awaitable, cast, Any
 from ...models.schemas import SentimentAnalysisResult, TokenDetails
 from ...config.logging_config import get_logger
 from ...config.sentiment_config import DEFAULT_AGENT_RETRIES
@@ -36,8 +36,8 @@ class AgentRetryWrapper:
         self,
         agent_run_func: Callable[..., Awaitable[SentimentAnalysisResult]],
         agent_type: str,
-        *args,
-        **kwargs
+        *args: Any,
+        **kwargs: Any
     ) -> SentimentAnalysisResult:
         """
         Execute agent run function with retry logic for non-TokenDetails results.

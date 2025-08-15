@@ -1,21 +1,24 @@
-# AI-Powered Cryptocurrency Token Detection Service
+# AI-Powered Sentiment Analysis & Topic Detection Service
 
 ![Cover picture](cover.png)
 
-An AI-powered sentiment analysis microservice for cryptocurrency token detection, built on a threaded RabbitMQ message processing architecture. The application specializes in analyzing tweets and social media content to detect new cryptocurrency token announcements using advanced AI agents, automatically publishing snipe actions for downstream trading systems.
+An AI-powered sentiment analysis microservice for cryptocurrency token detection and geopolitical topic analysis, built on a threaded RabbitMQ message processing architecture. The application specializes in analyzing tweets and social media content to detect new cryptocurrency token announcements and Putin-Trump peace talks sentiment using advanced AI agents, automatically publishing snipe and trade actions for downstream systems.
 
 ## Features
 
 - **AI-Powered Token Detection**: PydanticAI agents analyze text, images, and web content for cryptocurrency token announcements
-- **Multi-Agent Architecture**: Specialized agents for text analysis, image OCR, and web scraping with result merging
-- **Automatic Snipe Actions**: Publishes structured snipe actions to `actions_to_take` queue when tokens are detected
+- **Geopolitical Topic Analysis**: Putin-Trump peace talks sentiment analysis using Grok-4 via OpenRouter
+- **Topic-Priority Processing**: Smart workflow that prioritizes topic analysis over token detection for optimized performance
+- **Multi-Agent Architecture**: Specialized agents for text analysis, image OCR, web scraping, topic filtering, and diplomatic sentiment scoring
+- **Dual Action Publishing**: Publishes structured snipe actions (tokens) and trade actions (sentiment) to `actions_to_take` queue
 - **Blockchain Address Validation**: Supports Solana and EVM chains with comprehensive address validation
-- **Threaded RabbitMQ Processing**: High-throughput message processing with thread-per-message pattern for concurrent sentiment analysis
+- **Threaded RabbitMQ Processing**: High-throughput message processing with thread-per-message pattern for concurrent analysis
 - **Message Buffer System**: Thread-safe FIFO buffer prevents message loss during RabbitMQ outages
 - **RabbitMQ Connection Monitoring**: Automatic health checks and reconnection with configurable retry logic
 - **Data Transformation Pipeline**: Tweet standardization with datetime parsing and URL extraction
 - **Factory Pattern Architecture**: Clean dependency injection with no global state
 - **Comprehensive Observability**: Logfire integration with PydanticAI instrumentation and structured logging
+- **Workflow Control**: Configurable topic analysis and token detection workflows with environment variables
 - **Comprehensive Testing**: 90%+ test coverage with integration tests for AI agents
 - **High Performance**: Thread-per-message processing enables concurrent sentiment analysis with optimal CPU utilization
 
@@ -38,13 +41,15 @@ An AI-powered sentiment analysis microservice for cryptocurrency token detection
 **Local Development:**
 - Python 3.12+
 - UV package manager
-- OpenAI API key (for PydanticAI agents)
+- OpenAI API key (for token detection agents)
+- OpenRouter API key (for topic analysis agents using Grok-4)
 - RabbitMQ server (for message processing)
 - Optional: Firecrawl MCP server (for web scraping agent)
 
 **Docker Deployment:**
 - Docker and Docker Compose
-- OpenAI API key (for PydanticAI agents)
+- OpenAI API key (for token detection agents)
+- OpenRouter API key (for topic analysis agents)
 - Optional: Firecrawl API key (for enhanced web scraping)
 
 ### Installation
@@ -83,6 +88,7 @@ Create a `.env` file with the following variables:
 ```env
 ENVIRONMENT=development  # or 'production' for JSON logs
 OPENAI_API_KEY=your_openai_api_key_here
+OPENROUTER_API_KEY=your_openrouter_api_key_here  # For topic analysis
 ```
 
 ### RabbitMQ Configuration
@@ -110,12 +116,18 @@ MESSAGE_BUFFER_ENABLED=true          # Enable/disable buffering (default: true)
 MESSAGE_BUFFER_SIZE=10               # Buffer capacity (default: 10)
 ```
 
-### Sentiment Analysis Configuration
+### Analysis Configuration
 ```env
-SENTIMENT_MODEL_NAME=openai:gpt-4o   # AI model for analysis (default)
+# Token Detection
+SENTIMENT_MODEL_NAME=openai:gpt-4o   # AI model for token analysis (default)
 FIRECRAWL_MCP_SERVER_URL=http://localhost:3000/sse  # Optional web scraping
 MAX_CONCURRENT_ANALYSIS=5            # Max concurrent agent operations (default: 5)
 AGENT_RETRIES=4                      # Retry attempts for failed operations (default: 4)
+
+# Workflow Control
+TOPIC_ANALYSIS_ENABLED=true          # Enable topic analysis workflow (default: true)
+TOKEN_DETECTION_ENABLED=true         # Enable token detection workflow (default: true)
+PEACE_TALKS_TOPIC_ENABLED=true       # Enable Putin-Trump peace talks analysis (default: true)
 ```
 
 ### Logfire Configuration (Optional)
@@ -131,15 +143,15 @@ SERVICE_VERSION=0.1.0
 
 ### Threaded AI-Powered Message Processing Design
 
-The system uses a **threaded architecture with AI-powered sentiment analysis** and dependency injection:
+The system uses a **threaded architecture with AI-powered sentiment analysis and topic analysis** and dependency injection:
 
 - **Main Application** (`main.py`): Application orchestration with threaded message processing for high throughput
-- **Threaded Message Handler** (`src/handlers/message_handler.py`): Thread-per-message RabbitMQ processing with dependency injection
-- **AI Agent System** (`src/core/agents/` package): PydanticAI agents for text, image, and web content analysis
-- **Sentiment Analyzer** (`src/core/sentiment_analyzer.py`): Agent orchestration and result merging
+- **Threaded Message Handler** (`src/handlers/message_handler.py`): Thread-per-message RabbitMQ processing with dual-action publishing
+- **AI Agent System** (`src/core/agents/` package): PydanticAI agents for text, image, web content analysis, topic filtering, and diplomatic sentiment scoring
+- **Sentiment Analyzer** (`src/core/sentiment_analyzer.py`): Topic-priority agent orchestration and result merging
 - **MQ Subscriber** (`src/core/mq_subscriber.py`): RabbitMQ consumption and publishing with schema validation
 - **Data Transformation** (`src/core/transformation.py`): Tweet standardization and format conversion
-- **Schema Validation** (`src/models/schemas.py`): Pydantic models for tokens, tweets, and snipe actions
+- **Schema Validation** (`src/models/schemas.py`): Pydantic models for tokens, tweets, snipe actions, topic analysis, and trade actions
 - **RabbitMQ Monitor** (`src/core/rabbitmq_monitor.py`): Connection monitoring with automatic reconnection
 - **Message Buffer** (`src/core/message_buffer.py`): Thread-safe FIFO buffer for RabbitMQ outages
 - **Address Validators** (`src/core/utils/` package): Blockchain address validation for Solana and EVM chains
@@ -153,10 +165,12 @@ The system uses a **threaded architecture with AI-powered sentiment analysis** a
 │   │   ├── logfire_config.py # Logfire observability configuration
 │   │   └── sentiment_config.py # Sentiment analysis and agent configuration
 │   ├── core/                 # Core business logic modules
-│   │   ├── agents/          # AI sentiment analysis agents
+│   │   ├── agents/          # AI sentiment analysis and topic analysis agents
 │   │   │   ├── text_search_agent.py # Text content analysis agent
 │   │   │   ├── image_search_agent.py # Image text extraction agent
-│   │   │   └── firecrawl_agent.py # Web scraping agent
+│   │   │   ├── firecrawl_agent.py # Web scraping agent
+│   │   │   ├── topic_filter_agent.py # Putin-Trump peace talks topic filtering
+│   │   │   └── topic_sentiment_agent.py # Putin-Trump alignment scoring
 │   │   ├── utils/           # Utility functions
 │   │   │   └── address_validators.py # Blockchain address validation
 │   │   ├── sentiment_analyzer.py # Main sentiment analysis orchestration
@@ -168,9 +182,9 @@ The system uses a **threaded architecture with AI-powered sentiment analysis** a
 │   │   ├── tweet.py         # Tweet message handler with transformation and sentiment analysis
 │   │   └── message_handler.py # Threaded RabbitMQ message handler with thread-per-message processing
 │   └── models/               # Data models and schemas
-│       └── schemas.py       # Pydantic models for tokens, tweets, and snipe actions
+│       └── schemas.py       # Pydantic models for tokens, tweets, actions, and topic analysis
 ├── tests/                    # Comprehensive test suite with AI agent integration tests
-├── examples/                 # Example files and sample data
+├── examples/                 # Example files and sample data (includes PeaceTalksAnalyze.ipynb)
 ├── docs/                     # Documentation files
 ├── logs/                     # Log files (auto-created)
 └── docker-compose.yml        # Multi-service Docker orchestration
@@ -223,16 +237,39 @@ uv run pytest tests/integration/test_agents_integration.py --snapshot-update
 ## Key Components
 
 ### AI Agent System
+
+#### Token Detection Agents
 - **TextSearchAgent**: Analyzes tweet text content for token announcements and blockchain addresses
 - **ImageSearchAgent**: Extracts text from images and analyzes for token information using OCR
 - **FirecrawlAgent**: Scrapes linked websites for token announcement content
-- **Multi-Agent Coordination**: Concurrent execution with result merging and priority logic
 - **Chain Detection**: Supports Solana and 20+ EVM chains with automatic address validation
 
-### Snipe Action Publishing
+#### Topic Analysis Agents
+- **TopicFilterAgent**: Filters tweets for Putin-Trump peace talks relevance using Grok-4
+- **TopicSentimentAgent**: Scores Putin-Trump diplomatic alignment (1-10 scale) using Grok-4
+- **Geopolitical Intelligence**: Specialized analysis for diplomatic meeting outcomes
+- **News Source Optimization**: Optimized for major outlets (@BBCBreaking, @Reuters, @AP, @FoxNews)
+
+#### Agent Orchestration
+- **Topic-Priority Logic**: Smart workflow that checks topic relevance before running expensive token detection
+- **Multi-Agent Coordination**: Concurrent execution with result merging and priority logic
+- **Dual-Path Processing**: Optimized branching between topic analysis and token detection workflows
+
+### Action Publishing System
+
+#### Snipe Actions (Token Detection)
 - **Automatic Detection**: When `TokenDetails` are found, publishes structured snipe actions
 - **Message Format**: Standardized JSON with `action: "snipe"` and token parameters
-- **Queue Integration**: Publishes to configurable `actions_to_take` queue for downstream services
+- **Token Parameters**: Includes chain ID, chain name, and contract address
+
+#### Trade Actions (Topic Sentiment)
+- **Diplomatic Analysis**: When Putin-Trump sentiment is detected, publishes trade actions
+- **Alignment-Based**: Action parameters based on 1-10 diplomatic alignment score
+- **Message Format**: Standardized JSON with `action: "trade"` and trading parameters
+
+#### Queue Integration
+- **Unified Queue**: Both action types published to configurable `actions_to_take` queue
+- **Downstream Services**: Trading and analysis services consume appropriate action types
 - **Error Handling**: Comprehensive error handling with logging and buffering support
 
 ### Threaded Message Processing Pipeline
@@ -302,9 +339,13 @@ uv run pytest tests/ -k "message_handler" -v
 OPENAI_API_KEY=your_key uv run pytest tests/integration/ -v
 ```
 
-## Snipe Action Workflow
+## Analysis Workflows
 
-The application automatically publishes **snipe actions** when AI agents detect cryptocurrency token announcements:
+The application implements **topic-priority analysis** that branches between token detection and diplomatic sentiment analysis:
+
+## Token Detection Workflow (Snipe Actions)
+
+When topic analysis determines content is not related to Putin-Trump peace talks, the system runs cryptocurrency token detection:
 
 ### 1. Tweet Processing
 ```bash
@@ -341,6 +382,47 @@ When `TokenDetails` are detected, a snipe action is automatically published:
 - **Queue**: Published to `actions_to_take` queue (configurable via `ACTIONS_QUEUE_NAME`)
 - **Next Service**: Downstream trading services consume snipe actions for automated token acquisition
 - **Error Handling**: Failed publishes are buffered during RabbitMQ outages
+
+## Topic Analysis Workflow (Trade Actions)
+
+When topic analysis determines content relates to Putin-Trump peace talks, the system runs diplomatic sentiment analysis:
+
+### 1. Topic Filtering
+```bash
+# Incoming news tweet from major outlet
+{
+  "id": "67890",
+  "text": "BREAKING: Putin and Trump reach historic agreement on Ukraine ceasefire framework after Alaska summit",
+  "author_name": "BBCBreaking",
+  "created_at": "Thu Aug 15 18:30:15 +0000 2025"
+}
+```
+
+### 2. Topic Analysis
+- **TopicFilterAgent** analyzes content for Putin-Trump meeting relevance
+- **TopicSentimentAgent** scores diplomatic alignment on 1-10 scale
+- **Contextual Understanding**: Leverages Grok-4's geopolitical knowledge
+- **Semantic Analysis**: Infers relevance even without explicit date/location mentions
+
+### 3. Automatic Trade Action Publishing
+When alignment data is detected, a trade action is automatically published:
+
+```json
+{
+  "action": "trade",
+  "params": {}
+}
+```
+
+**Note**: Trade action parameters are currently mock implementation. Production would include:
+- Score-based trading strategies (1-3: conservative, 4-7: moderate, 8-10: aggressive)
+- Position sizing based on alignment confidence
+- Risk management parameters
+
+### 4. Downstream Integration
+- **Queue**: Published to same `actions_to_take` queue as snipe actions
+- **Next Service**: Political analysis or trading services consume trade actions
+- **Score Context**: Alignment score (1-10) provides decision context for downstream systems
 
 ## Logging
 
@@ -389,7 +471,7 @@ firecrawl:
 - **Integration**: Enables analysis of linked websites in tweets
 - **Optional**: Service can be disabled if web scraping is not needed
 
-**3. Sentiment Analyzer (Main Application)**
+**3. Sentiment & Topic Analyzer (Main Application)**
 ```yaml
 sentiment-analyzer:
   build: .
@@ -397,7 +479,8 @@ sentiment-analyzer:
     - rabbitmq
     - firecrawl
 ```
-- **Purpose**: Main threaded message processing application
+- **Purpose**: Main threaded message processing with dual-path analysis (token detection + topic analysis)
+- **AI Models**: Supports both OpenAI (token detection) and OpenRouter/Grok-4 (topic analysis)
 - **Dependencies**: Waits for RabbitMQ and Firecrawl to be healthy before starting
 - **Volumes**: Mounts `./logs` for persistent log access from host
 - **Environment**: All configuration passed via environment variables
@@ -445,10 +528,16 @@ All configuration from your `.env` file is automatically passed to containers:
 # Example .env for Docker deployment
 ENVIRONMENT=production
 OPENAI_API_KEY=your_openai_api_key_here
+OPENROUTER_API_KEY=your_openrouter_api_key_here  # For topic analysis
 RABBITMQ_USERNAME=admin
 RABBITMQ_PASSWORD=changeme
 FIRECRAWL_API_KEY=your_firecrawl_key_here  # Optional
 LOGFIRE_TOKEN=your_logfire_token_here      # Optional
+
+# Workflow Control
+TOPIC_ANALYSIS_ENABLED=true
+TOKEN_DETECTION_ENABLED=true
+PEACE_TALKS_TOPIC_ENABLED=true
 ```
 
 ### Service Health Monitoring

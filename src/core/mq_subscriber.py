@@ -13,7 +13,7 @@ from pika.spec import Basic, BasicProperties
 from pydantic import ValidationError
 from ..config.logging_config import get_logger
 from .message_buffer import MessageBuffer
-from ..models.schemas import TweetOutput, SnipeAction
+from ..models.schemas import TweetOutput, SnipeAction, TradeAction
 
 logger = get_logger(__name__)
 
@@ -261,11 +261,11 @@ class MQSubscriber:
             self._consumer_channel = self._consumer_connection.channel()
             self._consumer_channel.queue_declare(queue=self.consume_queue, durable=True)
     
-    def publish(self, message: Union[Dict[str, Any], TweetOutput, SnipeAction], queue_name: Optional[str] = None) -> bool:
+    def publish(self, message: Union[Dict[str, Any], TweetOutput, SnipeAction, TradeAction], queue_name: Optional[str] = None) -> bool:
         """Publish JSON message to RabbitMQ queue with automatic buffering on failure.
         
         Args:
-            message: Dictionary, TweetOutput, or SnipeAction object to be serialized as JSON and published
+            message: Dictionary, TweetOutput, SnipeAction, or TradeAction object to be serialized as JSON and published
             queue_name: Optional queue name to publish to (defaults to self.queue_name)
             
         Returns:
@@ -278,7 +278,7 @@ class MQSubscriber:
         target_queue = queue_name or self.queue_name
         
         # Input validation and type conversion
-        if isinstance(message, (TweetOutput, SnipeAction)):
+        if isinstance(message, (TweetOutput, SnipeAction, TradeAction)):
             # Convert Pydantic model to dictionary
             message = message.model_dump()
         elif isinstance(message, dict):

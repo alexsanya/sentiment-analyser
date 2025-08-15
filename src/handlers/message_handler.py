@@ -10,13 +10,14 @@ import json
 import os
 import threading
 import time
-from typing import Any, List
+from typing import Any, List, Callable
 from pika.adapters.blocking_connection import BlockingChannel
 from pika.spec import Basic, BasicProperties
 
 from ..config.logging_config import get_logger
 from ..core.mq_subscriber import MQSubscriber
-from ..models.schemas import TokenDetails, SnipeAction, SnipeActionParams
+from ..models.schemas import TokenDetails, SnipeAction, SnipeActionParams, TradeAction, AlignmentData
+from ..core.sentiment_analyzer import get_trade_action
 from .tweet import handle_tweet_event
 
 logger = get_logger(__name__)
@@ -106,29 +107,37 @@ def process_message_work(
             return
         
         try:
-            # Process tweet with sentiment analysis - this may take time
+            # Process tweet with topic-priority analysis - this may take time
             logger.debug(
-                "Starting sentiment analysis",
+                "Starting topic-priority analysis",
                 thread_id=thread_id,
                 delivery_tag=delivery_tag
             )
+
+            logger.info(f"Tweet data: {tweet_data}")
             
-            tweet_output = handle_tweet_event(tweet_data)
+            processing_result = handle_tweet_event(tweet_data)
+            tweet_output = processing_result.tweet_output
+            analysis = processing_result.analysis
             
             processing_time = time.time() - start_time
             logger.info(
-                "Sentiment analysis completed",
+                "Topic-priority analysis completed",
                 thread_id=thread_id,
                 delivery_tag=delivery_tag,
                 processing_time_seconds=round(processing_time, 2),
-                has_sentiment_result=tweet_output.sentiment_analysis is not None
+                has_sentiment_result=tweet_output.sentiment_analysis is not None,
+                has_alignment_data=analysis.has_topic_sentiment,
+                alignment_score=analysis.alignment_data.score if analysis.alignment_data else None
             )
             
-            # Check if sentiment analysis detected token details
-            if (tweet_output.sentiment_analysis and 
-                isinstance(tweet_output.sentiment_analysis, TokenDetails)):
+            # Get actions queue name from environment
+            actions_queue = os.getenv("ACTIONS_QUEUE_NAME", "actions_to_take")
+            
+            # Check for token detection (sentiment analysis result)
+            if analysis.has_token_detection and isinstance(analysis.sentiment_result, TokenDetails):
                 
-                token_details = tweet_output.sentiment_analysis
+                token_details = analysis.sentiment_result
                 
                 logger.info(
                     "Token detected - preparing snipe action",
@@ -145,10 +154,7 @@ def process_message_work(
                     chain_name=token_details.chain_name,
                     token_address=token_details.token_address
                 )
-                snipe_action = SnipeAction(params=snipe_params)
-                
-                # Get actions queue name from environment
-                actions_queue = os.getenv("ACTIONS_QUEUE_NAME", "actions_to_take")
+                snipe_action = SnipeAction(action="snipe", params=snipe_params)
                 
                 # Publish snipe action to actions queue
                 try:
@@ -179,9 +185,53 @@ def process_message_work(
                         token_address=token_details.token_address,
                         actions_queue=actions_queue
                     )
+            
+            # Check for topic sentiment (alignment data result)
+            elif analysis.has_topic_sentiment and analysis.alignment_data is not None:
+                alignment_data = analysis.alignment_data
+                
+                logger.info(
+                    "Topic sentiment detected - preparing trade action",
+                    thread_id=thread_id,
+                    delivery_tag=delivery_tag,
+                    alignment_score=alignment_data.score,
+                    explanation=alignment_data.explanation
+                )
+                
+                # Create trade action using mock function
+                trade_action = get_trade_action(alignment_data.score)
+                
+                # Publish trade action to actions queue
+                try:
+                    if mq_subscriber.publish(trade_action, queue_name=actions_queue):
+                        logger.info(
+                            "Trade action published successfully",
+                            thread_id=thread_id,
+                            delivery_tag=delivery_tag,
+                            alignment_score=alignment_data.score,
+                            actions_queue=actions_queue
+                        )
+                    else:
+                        logger.warning(
+                            "Failed to publish trade action",
+                            thread_id=thread_id,
+                            delivery_tag=delivery_tag,
+                            alignment_score=alignment_data.score,
+                            actions_queue=actions_queue
+                        )
+                except Exception as publish_error:
+                    logger.error(
+                        "Error publishing trade action",
+                        thread_id=thread_id,
+                        delivery_tag=delivery_tag,
+                        error=str(publish_error),
+                        alignment_score=alignment_data.score,
+                        actions_queue=actions_queue
+                    )
+            
             else:
                 logger.debug(
-                    "No token detected in message",
+                    "No actionable result detected in message",
                     thread_id=thread_id,
                     delivery_tag=delivery_tag
                 )
@@ -287,7 +337,7 @@ class ThreadedMessageProcessor:
         
         logger.info("ThreadedMessageProcessor initialized")
     
-    def create_message_handler(self):
+    def create_message_handler(self) -> Callable:
         """Create a message handler function configured for threaded processing.
         
         Returns:
@@ -302,7 +352,7 @@ class ThreadedMessageProcessor:
         logger.info("Threaded message handler created")
         return message_callback
     
-    def start_processing(self):
+    def start_processing(self) -> None:
         """Start the threaded message processing system."""
         if self.is_consuming:
             logger.warning("Threaded message processor is already running")
@@ -321,7 +371,7 @@ class ThreadedMessageProcessor:
         
         logger.info("Threaded message processing started")
     
-    def stop_processing(self, timeout: float = 30.0):
+    def stop_processing(self, timeout: float = 30.0) -> None:
         """Stop processing and wait for all threads to complete.
         
         Args:
@@ -342,7 +392,7 @@ class ThreadedMessageProcessor:
         
         logger.info("Threaded message processing stopped")
     
-    def cleanup_finished_threads(self):
+    def cleanup_finished_threads(self) -> None:
         """Remove finished threads from the threads list."""
         before_count = len(self.threads)
         self.threads = [t for t in self.threads if t.is_alive()]
@@ -355,7 +405,7 @@ class ThreadedMessageProcessor:
                 active_count=after_count
             )
     
-    def wait_for_threads(self, timeout: float = 30.0):
+    def wait_for_threads(self, timeout: float = 30.0) -> None:
         """Wait for all processing threads to complete.
         
         Args:
