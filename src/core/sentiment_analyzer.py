@@ -196,7 +196,7 @@ async def analyze_with_topic_priority(
         logger.warning("Both topic analysis and token detection are disabled")
         return None, None
     
-    logger.debug(
+    logger.info(
         "Starting analysis with topic-first priority",
         text_length=len(text),
         image_count=len(images),
@@ -212,7 +212,7 @@ async def analyze_with_topic_priority(
             topic_filter_agent = TopicFilterAgent(agent_retries=config.agent_retries)
             topic_result = await topic_filter_agent.run(text)
             
-            logger.debug(
+            logger.info(
                 "Topic filtering completed",
                 topic_match=topic_result.topic_match,
                 explanation=topic_result.explanation
@@ -256,7 +256,7 @@ async def analyze_with_topic_priority(
     
     # Step 3: Token detection (if enabled and topic didn't match)
     if config.token_detection_enabled:
-        logger.debug("Running token detection agents")
+        logger.info("Running token detection agents")
         
         try:
             # Run existing token detection logic
