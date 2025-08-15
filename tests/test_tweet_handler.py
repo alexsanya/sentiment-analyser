@@ -33,23 +33,26 @@ class TestTweetHandler:
         )
         
         with patch('src.handlers.tweet.map_tweet_data') as mock_transform:
-            with patch('src.handlers.tweet.analyze_tweet_sentiment', new_callable=AsyncMock) as mock_sentiment:
+            with patch('src.handlers.tweet.analyze_tweet_with_priority', new_callable=AsyncMock) as mock_analysis:
                 mock_transform.return_value = expected_tweet_output
-                mock_sentiment.return_value = NoTokenFound()
+                mock_analysis.return_value = (NoTokenFound(), None)  # Return tuple as expected
                 
-                result = handle_tweet_event(tweet_data)
+                result_tuple = handle_tweet_event(tweet_data)
+                result = result_tuple[0]  # Extract TweetOutput from tuple
+                alignment_data = result_tuple[1]  # Extract AlignmentData from tuple
                 
                 # Verify transformation was called
                 mock_transform.assert_called_once_with(tweet_data)
                 
-                # Verify sentiment analysis was called
-                mock_sentiment.assert_called_once_with(expected_tweet_output)
+                # Verify analysis was called
+                mock_analysis.assert_called_once_with(expected_tweet_output)
                 
                 # Verify returned data
                 assert result.createdAt == 1674549890
                 assert result.text == "Bitcoin is rising!"
                 assert result.data_source.author_name == "user1"
                 assert isinstance(result.sentiment_analysis, NoTokenFound)
+                assert alignment_data is None
     
     def test_handle_tweet_event_exception_handling(self):
         """Test tweet handler exception handling."""
@@ -92,19 +95,22 @@ class TestTweetHandler:
         )
         
         with patch('src.handlers.tweet.map_tweet_data') as mock_transform:
-            with patch('src.handlers.tweet.analyze_tweet_sentiment', new_callable=AsyncMock) as mock_sentiment:
+            with patch('src.handlers.tweet.analyze_tweet_with_priority', new_callable=AsyncMock) as mock_analysis:
                 with patch('src.handlers.tweet.logger') as mock_logger:
                     mock_transform.return_value = expected_tweet_output
-                    mock_sentiment.return_value = NoTokenFound()
+                    mock_analysis.return_value = (NoTokenFound(), None)
                     
-                    result = handle_tweet_event(tweet_data)
+                    result_tuple = handle_tweet_event(tweet_data)
+                    result = result_tuple[0]  # Extract TweetOutput from tuple
                     
                     # Verify logging was called
                     mock_logger.info.assert_called_with(
-                        "Tweet processed successfully with sentiment analysis",
+                        "Tweet processed successfully with topic-priority analysis",
                         tweet_id="123",
-                        author="user1",
-                        sentiment_result_type="NoTokenFound"
+                        author="user1",  # Gets author_name from tweet_data
+                        sentiment_result_type="NoTokenFound",
+                        has_alignment_data=False,
+                        alignment_score=None
                     )
     
     def test_handle_tweet_event_with_tsunami_warning_data(self):
@@ -134,17 +140,19 @@ class TestTweetHandler:
         )
         
         with patch('src.handlers.tweet.map_tweet_data') as mock_transform:
-            with patch('src.handlers.tweet.analyze_tweet_sentiment', new_callable=AsyncMock) as mock_sentiment:
+            with patch('src.handlers.tweet.analyze_tweet_with_priority', new_callable=AsyncMock) as mock_analysis:
                 mock_transform.return_value = expected_tweet_output
-                mock_sentiment.return_value = NoTokenFound()
+                mock_analysis.return_value = (NoTokenFound(), None)
                 
-                result = handle_tweet_event(tweet_data)
+                result_tuple = handle_tweet_event(tweet_data)
+                result = result_tuple[0]  # Extract TweetOutput from tuple
+                alignment_data = result_tuple[1]  # Extract AlignmentData from tuple
                 
                 # Verify transformation was called
                 mock_transform.assert_called_once_with(tweet_data)
                 
-                # Verify sentiment analysis was called
-                mock_sentiment.assert_called_once_with(expected_tweet_output)
+                # Verify analysis was called
+                mock_analysis.assert_called_once_with(expected_tweet_output)
                 
                 # Verify returned data matches expected output
                 assert result.createdAt == 1753841779
@@ -154,6 +162,7 @@ class TestTweetHandler:
                 assert result.media == ["https://pbs.twimg.com/media/GhivrlDWAAA7Ex3?format=jpg&name=medium"]
                 assert result.links == ["https://tsunami.gov/"]
                 assert isinstance(result.sentiment_analysis, NoTokenFound)
+                assert alignment_data is None
     
     def test_handle_tweet_event_with_mocked_sentiment_analysis(self):
         """Test tweet handler with mocked sentiment analysis using tsunami warning data."""
@@ -169,16 +178,18 @@ class TestTweetHandler:
             "links": ["https://tsunami.gov/"]
         }
         
-        with patch('src.handlers.tweet.analyze_tweet_sentiment', new_callable=AsyncMock) as mock_sentiment:
-            mock_sentiment.return_value = NoTokenFound()
+        with patch('src.handlers.tweet.analyze_tweet_with_priority', new_callable=AsyncMock) as mock_analysis:
+            mock_analysis.return_value = (NoTokenFound(), None)
             
-            result = handle_tweet_event(tweet_data)
+            result_tuple = handle_tweet_event(tweet_data)
+            result = result_tuple[0]  # Extract TweetOutput from tuple
+            alignment_data = result_tuple[1]  # Extract AlignmentData from tuple
             
-            # Verify sentiment analysis was called with the transformed data
-            mock_sentiment.assert_called_once()
-            called_tweet_output = mock_sentiment.call_args[0][0]
+            # Verify analysis was called with the transformed data
+            mock_analysis.assert_called_once()
+            called_tweet_output = mock_analysis.call_args[0][0]
             
-            # Check that the tweet output passed to sentiment analysis has correct structure
+            # Check that the tweet output passed to analysis has correct structure
             assert isinstance(called_tweet_output, TweetOutput)
             assert called_tweet_output.data_source.name == "Twitter"
             assert called_tweet_output.data_source.author_name == "realDonaldTrump"
@@ -188,7 +199,7 @@ class TestTweetHandler:
             assert called_tweet_output.media == []
             assert called_tweet_output.links == ["https://tsunami.gov/"]
             
-            # Verify the final result includes sentiment analysis
+            # Verify the final result includes analysis results
             assert result.createdAt == 1753841779
             assert result.data_source.author_name == "realDonaldTrump"
             assert result.data_source.author_id == "25073877"
@@ -196,3 +207,4 @@ class TestTweetHandler:
             assert result.media == []
             assert result.links == ["https://tsunami.gov/"]
             assert isinstance(result.sentiment_analysis, NoTokenFound)
+            assert alignment_data is None
