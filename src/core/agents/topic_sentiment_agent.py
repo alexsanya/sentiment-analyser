@@ -9,9 +9,7 @@ from pydantic_ai.providers.openrouter import OpenRouterProvider
 
 from ...models.schemas import AlignmentData
 from ...config.logging_config import get_logger
-from ...config.sentiment_config import DEFAULT_AGENT_RETRIES
 from ...config.logfire_config import create_logfire_span, log_agent_metrics
-from .retry_wrapper import AgentRetryWrapper
 
 logger = get_logger(__name__)
 
@@ -46,9 +44,12 @@ class TopicSentimentAgent:
     A PydanticAI agent that analyzes text to score Putin-Trump alignment (1-10 scale)
     """
     
-    def __init__(self):
+    def __init__(self, agent_retries: int = 3):
         """
         Initialize the agent with Grok-4 model via OpenRouter
+        
+        Args:
+            agent_retries: Number of retry attempts for the agent
         """
         model = OpenAIModel(
             'x-ai/grok-4',
@@ -58,10 +59,9 @@ class TopicSentimentAgent:
         self.agent = Agent[None, AlignmentData](  # type: ignore[call-overload]
             model=model,
             result_type=AlignmentData,
-            retries=0,  # Disable PydanticAI retries, use our custom retry wrapper
+            retries=agent_retries,
             system_prompt=TOPIC_SENTIMENT_PROMPT
         )
-        self.retry_wrapper = AgentRetryWrapper(max_retries=DEFAULT_AGENT_RETRIES)
     
     async def run(self, text: str) -> AlignmentData:
         """
@@ -72,22 +72,6 @@ class TopicSentimentAgent:
             
         Returns:
             AlignmentData with score and explanation
-        """
-        return await self.retry_wrapper.run_with_retry(
-            self._run_agent,
-            "topic_sentiment",
-            text
-        )
-    
-    async def _run_agent(self, text: str) -> AlignmentData:
-        """
-        Internal method to run the agent without retry logic.
-        
-        Args:
-            text: The given text
-            
-        Returns:
-            AlignmentData result
         """
         start_time = time.time()
         text_length = len(text)

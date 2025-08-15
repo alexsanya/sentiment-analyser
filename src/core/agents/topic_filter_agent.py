@@ -9,9 +9,7 @@ from pydantic_ai.providers.openrouter import OpenRouterProvider
 
 from ...models.schemas import TopicFilter
 from ...config.logging_config import get_logger
-from ...config.sentiment_config import DEFAULT_AGENT_RETRIES
 from ...config.logfire_config import create_logfire_span, log_agent_metrics
-from .retry_wrapper import AgentRetryWrapper
 
 logger = get_logger(__name__)
 
@@ -40,9 +38,12 @@ class TopicFilterAgent:
     A PydanticAI agent that analyzes text to determine if it relates to Putin-Trump peace talks
     """
     
-    def __init__(self):
+    def __init__(self, agent_retries: int = 3):
         """
         Initialize the agent with Grok-4 model via OpenRouter
+        
+        Args:
+            agent_retries: Number of retry attempts for the agent
         """
         model = OpenAIModel(
             'x-ai/grok-4',
@@ -52,10 +53,9 @@ class TopicFilterAgent:
         self.agent = Agent[None, TopicFilter](  # type: ignore[call-overload]
             model=model,
             result_type=TopicFilter,
-            retries=0,  # Disable PydanticAI retries, use our custom retry wrapper
+            retries=agent_retries,
             system_prompt=TOPIC_FILTER_PROMPT
         )
-        self.retry_wrapper = AgentRetryWrapper(max_retries=DEFAULT_AGENT_RETRIES)
     
     async def run(self, text: str) -> TopicFilter:
         """
@@ -66,22 +66,6 @@ class TopicFilterAgent:
             
         Returns:
             TopicFilter result indicating if topic matches
-        """
-        return await self.retry_wrapper.run_with_retry(
-            self._run_agent,
-            "topic_filter",
-            text
-        )
-    
-    async def _run_agent(self, text: str) -> TopicFilter:
-        """
-        Internal method to run the agent without retry logic.
-        
-        Args:
-            text: The given text
-            
-        Returns:
-            TopicFilter result
         """
         start_time = time.time()
         text_length = len(text)

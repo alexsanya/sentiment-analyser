@@ -209,7 +209,7 @@ async def analyze_with_topic_priority(
     # Step 1: Topic filtering (if enabled)
     if config.topic_analysis_enabled and config.peace_talks_topic_enabled:
         try:
-            topic_filter_agent = TopicFilterAgent()
+            topic_filter_agent = TopicFilterAgent(agent_retries=config.agent_retries)
             topic_result = await topic_filter_agent.run(text)
             
             logger.debug(
@@ -223,7 +223,7 @@ async def analyze_with_topic_priority(
                 logger.info("Topic matches Putin-Trump peace talks - running sentiment analysis")
                 
                 try:
-                    topic_sentiment_agent = TopicSentimentAgent()
+                    topic_sentiment_agent = TopicSentimentAgent(agent_retries=config.agent_retries)
                     alignment_result = await topic_sentiment_agent.run(text)
                     
                     logger.info(
