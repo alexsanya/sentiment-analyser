@@ -13,7 +13,7 @@ from src.handlers.message_handler import (
     ThreadedMessageProcessor,
     create_threaded_message_handler
 )
-from src.models.schemas import TokenDetails, TweetOutput, AlignmentData
+from src.models.schemas import TokenDetails, TweetOutput, AlignmentData, AnalysisResult, TweetProcessingResult
 
 
 class TestThreadSafeAcknowledgment:
@@ -89,7 +89,9 @@ class TestMessageProcessingWork:
             links=[],
             sentiment_analysis=token_details
         )
-        mock_handle_tweet.return_value = (tweet_output, None)
+        analysis_result = AnalysisResult.token_detection(token_details)
+        processing_result = TweetProcessingResult(tweet_output=tweet_output, analysis=analysis_result)
+        mock_handle_tweet.return_value = processing_result
         
         # Mock successful publish
         mq_subscriber.publish.return_value = True
@@ -136,7 +138,9 @@ class TestMessageProcessingWork:
             links=[],
             sentiment_analysis=None
         )
-        mock_handle_tweet.return_value = (tweet_output, alignment_data)
+        analysis_result = AnalysisResult.topic_sentiment(alignment_data)
+        processing_result = TweetProcessingResult(tweet_output=tweet_output, analysis=analysis_result)
+        mock_handle_tweet.return_value = processing_result
         
         # Mock successful publish
         mq_subscriber.publish.return_value = True
@@ -178,7 +182,9 @@ class TestMessageProcessingWork:
             links=[],
             sentiment_analysis=None
         )
-        mock_handle_tweet.return_value = (tweet_output, None)
+        analysis_result = AnalysisResult.no_analysis()
+        processing_result = TweetProcessingResult(tweet_output=tweet_output, analysis=analysis_result)
+        mock_handle_tweet.return_value = processing_result
         
         # Create test message
         tweet_data = {"text": "Regular tweet", "user": {"screen_name": "test"}}
@@ -484,7 +490,9 @@ class TestIntegration:
                 links=[],
                 sentiment_analysis=token_details
             )
-            mock_handle.return_value = (tweet_output, None)
+            analysis_result = AnalysisResult.token_detection(token_details)
+            processing_result = TweetProcessingResult(tweet_output=tweet_output, analysis=analysis_result)
+            mock_handle.return_value = processing_result
             
             # Execute message handling
             handler(channel, method, properties, body)

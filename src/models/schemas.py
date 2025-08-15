@@ -67,6 +67,53 @@ SentimentAnalysisResult = Union[TokenDetails, NoTokenFound, RelseaseAnnouncement
 TopicAnalysisResult = Union[TopicFilter, AlignmentData]
 
 
+class AnalysisResult(BaseModel):
+    """Container for analysis results with clear field names."""
+    sentiment_result: Optional[SentimentAnalysisResult] = Field(None, description="Token detection analysis result")
+    alignment_data: Optional[AlignmentData] = Field(None, description="Topic sentiment analysis result")
+    
+    @property
+    def has_token_detection(self) -> bool:
+        """Check if result contains token detection data."""
+        return (self.sentiment_result is not None and 
+                not isinstance(self.sentiment_result, NoTokenFound))
+    
+    @property
+    def has_topic_sentiment(self) -> bool:
+        """Check if result contains topic sentiment data."""
+        return self.alignment_data is not None
+    
+    @property
+    def analysis_type(self) -> str:
+        """Get the type of analysis performed."""
+        if self.has_token_detection:
+            return "token_detection"
+        elif self.has_topic_sentiment:
+            return "topic_sentiment"
+        else:
+            return "no_analysis"
+    
+    @property
+    def has_actionable_result(self) -> bool:
+        """Check if result has actionable data for publishing actions."""
+        return self.has_token_detection or self.has_topic_sentiment
+    
+    @classmethod
+    def token_detection(cls, result: SentimentAnalysisResult) -> 'AnalysisResult':
+        """Create result with token detection data."""
+        return cls(sentiment_result=result, alignment_data=None)
+    
+    @classmethod
+    def topic_sentiment(cls, data: AlignmentData) -> 'AnalysisResult':
+        """Create result with topic sentiment data."""
+        return cls(sentiment_result=None, alignment_data=data)
+    
+    @classmethod
+    def no_analysis(cls) -> 'AnalysisResult':
+        """Create result with no analysis data."""
+        return cls(sentiment_result=None, alignment_data=None)
+
+
 class DataSource(BaseModel):
     """Schema for data source"""
     name: str = Field("", description="Data source name")
@@ -95,3 +142,14 @@ class TweetOutput(BaseModel):
         if not isinstance(v, list):
             return []
         return [url for url in v if isinstance(url, str) and url.strip()]
+
+
+class TweetProcessingResult(BaseModel):
+    """Container for complete tweet processing results."""
+    tweet_output: TweetOutput = Field(..., description="Processed tweet data")
+    analysis: AnalysisResult = Field(..., description="Analysis results")
+    
+    @property
+    def has_actionable_result(self) -> bool:
+        """Check if processing result has actionable data."""
+        return self.analysis.has_actionable_result

@@ -12,13 +12,15 @@ from ..models.schemas import (
     TweetOutput, 
     SentimentAnalysisResult, 
     AlignmentData,
-    NoTokenFound
+    NoTokenFound,
+    AnalysisResult,
+    TweetProcessingResult
 )
 
 logger = get_logger(__name__)
 
 
-async def analyze_tweet_with_priority(tweet_output: TweetOutput) -> Tuple[Optional[SentimentAnalysisResult], Optional[AlignmentData]]:
+async def analyze_tweet_with_priority(tweet_output: TweetOutput) -> AnalysisResult:
     """
     Analyze tweet content using topic-first priority logic.
     
@@ -26,13 +28,13 @@ async def analyze_tweet_with_priority(tweet_output: TweetOutput) -> Tuple[Option
         tweet_output: Transformed tweet data
         
     Returns:
-        Tuple of (sentiment_result, alignment_data) where only one will be non-None
+        AnalysisResult containing either sentiment analysis or alignment data
     """
     try:
         logger.info("Starting analysis with topic-first priority")
         
         # Use the new topic priority logic
-        sentiment_result, alignment_data = await analyze_with_topic_priority(
+        analysis_result = await analyze_with_topic_priority(
             text=tweet_output.text,
             images=tweet_output.media,
             links=tweet_output.links
@@ -40,49 +42,49 @@ async def analyze_tweet_with_priority(tweet_output: TweetOutput) -> Tuple[Option
         
         logger.info(
             "Topic-priority analysis completed",
-            has_sentiment_result=sentiment_result is not None,
-            has_alignment_data=alignment_data is not None,
-            sentiment_type=type(sentiment_result).__name__ if sentiment_result else None,
-            alignment_score=alignment_data.score if alignment_data else None
+            has_sentiment_result=analysis_result.sentiment_result is not None,
+            has_alignment_data=analysis_result.alignment_data is not None,
+            sentiment_type=type(analysis_result.sentiment_result).__name__ if analysis_result.sentiment_result else None,
+            alignment_score=analysis_result.alignment_data.score if analysis_result.alignment_data else None
         )
         
-        return sentiment_result, alignment_data
+        return analysis_result
         
     except Exception as e:
         logger.error("Topic-priority analysis failed", error=str(e))
-        return NoTokenFound(), None
+        return AnalysisResult.token_detection(NoTokenFound())
 
 
-async def handle_tweet_event_async(tweet_data: Dict[str, Any]) -> Tuple[TweetOutput, Optional[AlignmentData]]:
+async def handle_tweet_event_async(tweet_data: Dict[str, Any]) -> TweetProcessingResult:
     """Process tweet data with topic-priority analysis and return transformed result.
     
     Args:
         tweet_data: Raw tweet data to process
         
     Returns:
-        Tuple of (TweetOutput with sentiment analysis, alignment_data for trade actions)
+        TweetProcessingResult containing processed tweet and analysis results
     """
     try:
         # Transform the tweet data
         transformed_data = map_tweet_data(tweet_data)
         
         # Perform topic-priority analysis
-        sentiment_result, alignment_data = await analyze_tweet_with_priority(transformed_data)
+        analysis_result = await analyze_tweet_with_priority(transformed_data)
         
         # Add sentiment analysis to the output (only if we got a sentiment result)
-        if sentiment_result is not None:
-            transformed_data.sentiment_analysis = sentiment_result
+        if analysis_result.sentiment_result is not None:
+            transformed_data.sentiment_analysis = analysis_result.sentiment_result
         
         logger.info(
             "Tweet processed successfully with topic-priority analysis",
             tweet_id=tweet_data.get("id"),
             author=tweet_data.get("author_name"),
-            sentiment_result_type=type(sentiment_result).__name__ if sentiment_result else None,
-            has_alignment_data=alignment_data is not None,
-            alignment_score=alignment_data.score if alignment_data else None
+            sentiment_result_type=type(analysis_result.sentiment_result).__name__ if analysis_result.sentiment_result else None,
+            has_alignment_data=analysis_result.alignment_data is not None,
+            alignment_score=analysis_result.alignment_data.score if analysis_result.alignment_data else None
         )
         
-        return transformed_data, alignment_data
+        return TweetProcessingResult(tweet_output=transformed_data, analysis=analysis_result)
         
     except Exception as e:
         logger.error(
@@ -93,14 +95,14 @@ async def handle_tweet_event_async(tweet_data: Dict[str, Any]) -> Tuple[TweetOut
         raise
 
 
-def handle_tweet_event(tweet_data: Dict[str, Any]) -> Tuple[TweetOutput, Optional[AlignmentData]]:
+def handle_tweet_event(tweet_data: Dict[str, Any]) -> TweetProcessingResult:
     """Process tweet data and return transformed result (synchronous wrapper).
     
     Args:
         tweet_data: Raw tweet data to process
         
     Returns:
-        Tuple of (TweetOutput with sentiment analysis, alignment_data for trade actions)
+        TweetProcessingResult containing processed tweet and analysis results
     """
     try:
         # Run the async version in a new event loop

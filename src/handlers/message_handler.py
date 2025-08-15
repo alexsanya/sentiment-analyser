@@ -116,7 +116,9 @@ def process_message_work(
 
             logger.info(f"Tweet data: {tweet_data}")
             
-            tweet_output, alignment_data = handle_tweet_event(tweet_data)
+            processing_result = handle_tweet_event(tweet_data)
+            tweet_output = processing_result.tweet_output
+            analysis = processing_result.analysis
             
             processing_time = time.time() - start_time
             logger.info(
@@ -125,18 +127,17 @@ def process_message_work(
                 delivery_tag=delivery_tag,
                 processing_time_seconds=round(processing_time, 2),
                 has_sentiment_result=tweet_output.sentiment_analysis is not None,
-                has_alignment_data=alignment_data is not None,
-                alignment_score=alignment_data.score if alignment_data else None
+                has_alignment_data=analysis.has_topic_sentiment,
+                alignment_score=analysis.alignment_data.score if analysis.alignment_data else None
             )
             
             # Get actions queue name from environment
             actions_queue = os.getenv("ACTIONS_QUEUE_NAME", "actions_to_take")
             
             # Check for token detection (sentiment analysis result)
-            if (tweet_output.sentiment_analysis and 
-                isinstance(tweet_output.sentiment_analysis, TokenDetails)):
+            if analysis.has_token_detection:
                 
-                token_details = tweet_output.sentiment_analysis
+                token_details = analysis.sentiment_result
                 
                 logger.info(
                     "Token detected - preparing snipe action",
@@ -186,17 +187,17 @@ def process_message_work(
                     )
             
             # Check for topic sentiment (alignment data result)
-            elif alignment_data is not None:
+            elif analysis.has_topic_sentiment:
                 logger.info(
                     "Topic sentiment detected - preparing trade action",
                     thread_id=thread_id,
                     delivery_tag=delivery_tag,
-                    alignment_score=alignment_data.score,
-                    explanation=alignment_data.explanation
+                    alignment_score=analysis.alignment_data.score,
+                    explanation=analysis.alignment_data.explanation
                 )
                 
                 # Create trade action using mock function
-                trade_action = get_trade_action(alignment_data.score)
+                trade_action = get_trade_action(analysis.alignment_data.score)
                 
                 # Publish trade action to actions queue
                 try:
@@ -205,7 +206,7 @@ def process_message_work(
                             "Trade action published successfully",
                             thread_id=thread_id,
                             delivery_tag=delivery_tag,
-                            alignment_score=alignment_data.score,
+                            alignment_score=analysis.alignment_data.score,
                             actions_queue=actions_queue
                         )
                     else:
@@ -213,7 +214,7 @@ def process_message_work(
                             "Failed to publish trade action",
                             thread_id=thread_id,
                             delivery_tag=delivery_tag,
-                            alignment_score=alignment_data.score,
+                            alignment_score=analysis.alignment_data.score,
                             actions_queue=actions_queue
                         )
                 except Exception as publish_error:

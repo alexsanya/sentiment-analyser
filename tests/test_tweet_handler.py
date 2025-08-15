@@ -3,7 +3,7 @@
 import pytest
 from unittest.mock import patch, AsyncMock
 from src.handlers.tweet import handle_tweet_event
-from src.models.schemas import TweetOutput, DataSource, NoTokenFound
+from src.models.schemas import TweetOutput, DataSource, NoTokenFound, AnalysisResult, TweetProcessingResult
 
 
 class TestTweetHandler:
@@ -35,11 +35,11 @@ class TestTweetHandler:
         with patch('src.handlers.tweet.map_tweet_data') as mock_transform:
             with patch('src.handlers.tweet.analyze_tweet_with_priority', new_callable=AsyncMock) as mock_analysis:
                 mock_transform.return_value = expected_tweet_output
-                mock_analysis.return_value = (NoTokenFound(), None)  # Return tuple as expected
+                mock_analysis.return_value = AnalysisResult.token_detection(NoTokenFound())  # Return AnalysisResult
                 
-                result_tuple = handle_tweet_event(tweet_data)
-                result = result_tuple[0]  # Extract TweetOutput from tuple
-                alignment_data = result_tuple[1]  # Extract AlignmentData from tuple
+                processing_result = handle_tweet_event(tweet_data)
+                result = processing_result.tweet_output  # Extract TweetOutput from result
+                analysis = processing_result.analysis  # Extract AnalysisResult
                 
                 # Verify transformation was called
                 mock_transform.assert_called_once_with(tweet_data)
@@ -48,11 +48,13 @@ class TestTweetHandler:
                 mock_analysis.assert_called_once_with(expected_tweet_output)
                 
                 # Verify returned data
+                assert isinstance(processing_result, TweetProcessingResult)
                 assert result.createdAt == 1674549890
                 assert result.text == "Bitcoin is rising!"
                 assert result.data_source.author_name == "user1"
                 assert isinstance(result.sentiment_analysis, NoTokenFound)
-                assert alignment_data is None
+                assert analysis.analysis_type == "no_analysis"
+                assert not analysis.has_actionable_result
     
     def test_handle_tweet_event_exception_handling(self):
         """Test tweet handler exception handling."""
@@ -98,10 +100,10 @@ class TestTweetHandler:
             with patch('src.handlers.tweet.analyze_tweet_with_priority', new_callable=AsyncMock) as mock_analysis:
                 with patch('src.handlers.tweet.logger') as mock_logger:
                     mock_transform.return_value = expected_tweet_output
-                    mock_analysis.return_value = (NoTokenFound(), None)
+                    mock_analysis.return_value = AnalysisResult.token_detection(NoTokenFound())
                     
-                    result_tuple = handle_tweet_event(tweet_data)
-                    result = result_tuple[0]  # Extract TweetOutput from tuple
+                    processing_result = handle_tweet_event(tweet_data)
+                    result = processing_result.tweet_output  # Extract TweetOutput
                     
                     # Verify logging was called
                     mock_logger.info.assert_called_with(
@@ -142,11 +144,11 @@ class TestTweetHandler:
         with patch('src.handlers.tweet.map_tweet_data') as mock_transform:
             with patch('src.handlers.tweet.analyze_tweet_with_priority', new_callable=AsyncMock) as mock_analysis:
                 mock_transform.return_value = expected_tweet_output
-                mock_analysis.return_value = (NoTokenFound(), None)
+                mock_analysis.return_value = AnalysisResult.token_detection(NoTokenFound())
                 
-                result_tuple = handle_tweet_event(tweet_data)
-                result = result_tuple[0]  # Extract TweetOutput from tuple
-                alignment_data = result_tuple[1]  # Extract AlignmentData from tuple
+                processing_result = handle_tweet_event(tweet_data)
+                result = processing_result.tweet_output  # Extract TweetOutput
+                analysis = processing_result.analysis  # Extract AnalysisResult
                 
                 # Verify transformation was called
                 mock_transform.assert_called_once_with(tweet_data)
@@ -162,7 +164,6 @@ class TestTweetHandler:
                 assert result.media == ["https://pbs.twimg.com/media/GhivrlDWAAA7Ex3?format=jpg&name=medium"]
                 assert result.links == ["https://tsunami.gov/"]
                 assert isinstance(result.sentiment_analysis, NoTokenFound)
-                assert alignment_data is None
     
     def test_handle_tweet_event_with_mocked_sentiment_analysis(self):
         """Test tweet handler with mocked sentiment analysis using tsunami warning data."""
@@ -179,11 +180,11 @@ class TestTweetHandler:
         }
         
         with patch('src.handlers.tweet.analyze_tweet_with_priority', new_callable=AsyncMock) as mock_analysis:
-            mock_analysis.return_value = (NoTokenFound(), None)
+            mock_analysis.return_value = AnalysisResult.token_detection(NoTokenFound())
             
-            result_tuple = handle_tweet_event(tweet_data)
-            result = result_tuple[0]  # Extract TweetOutput from tuple
-            alignment_data = result_tuple[1]  # Extract AlignmentData from tuple
+            processing_result = handle_tweet_event(tweet_data)
+            result = processing_result.tweet_output  # Extract TweetOutput
+            analysis = processing_result.analysis  # Extract AnalysisResult
             
             # Verify analysis was called with the transformed data
             mock_analysis.assert_called_once()
@@ -207,4 +208,3 @@ class TestTweetHandler:
             assert result.media == []
             assert result.links == ["https://tsunami.gov/"]
             assert isinstance(result.sentiment_analysis, NoTokenFound)
-            assert alignment_data is None

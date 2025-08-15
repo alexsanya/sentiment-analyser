@@ -14,7 +14,8 @@ from ..models.schemas import (
     TopicFilter,
     AlignmentData,
     TradeAction,
-    TradeActionParams
+    TradeActionParams,
+    AnalysisResult
 )
 from .agents import (
     TextSearchAgent, 
@@ -165,9 +166,9 @@ def merge_agent_results(results: List[Tuple[AgentType, SentimentAnalysisResult]]
 
 async def analyze_with_topic_priority(
     text: str, 
-    images: List[str] = None, 
-    links: List[str] = None
-) -> Tuple[Optional[SentimentAnalysisResult], Optional[AlignmentData]]:
+    images: Optional[List[str]] = None, 
+    links: Optional[List[str]] = None
+) -> AnalysisResult:
     """
     Analyze content with topic-first priority logic.
     
@@ -182,7 +183,7 @@ async def analyze_with_topic_priority(
         links: List of external links (optional)
         
     Returns:
-        Tuple of (sentiment_result, alignment_data) where only one will be non-None
+        AnalysisResult containing either sentiment analysis or alignment data
     """
     if images is None:
         images = []
@@ -194,7 +195,7 @@ async def analyze_with_topic_priority(
     # Check if workflows are enabled
     if not config.topic_analysis_enabled and not config.token_detection_enabled:
         logger.warning("Both topic analysis and token detection are disabled")
-        return None, None
+        return AnalysisResult.no_analysis()
     
     logger.info(
         "Starting analysis with topic-first priority",
@@ -232,7 +233,7 @@ async def analyze_with_topic_priority(
                         explanation=alignment_result.explanation
                     )
                     
-                    return None, alignment_result
+                    return AnalysisResult.topic_sentiment(alignment_result)
                     
                 except Exception as e:
                     logger.error(
@@ -241,7 +242,7 @@ async def analyze_with_topic_priority(
                         error_type=type(e).__name__
                     )
                     # Return topic match but no sentiment data
-                    return None, AlignmentData(score=None, explanation=f"Sentiment analysis failed: {str(e)}")
+                    return AnalysisResult.topic_sentiment(AlignmentData(score=None, explanation=f"Sentiment analysis failed: {str(e)}"))
             
             else:
                 logger.debug("Topic does not match - proceeding to token detection")
@@ -290,10 +291,10 @@ async def analyze_with_topic_priority(
                     result_type=type(merged_result).__name__,
                     agent_count=len(agent_results)
                 )
-                return merged_result, None
+                return AnalysisResult.token_detection(merged_result)
             else:
                 logger.debug("No token detection agents were run")
-                return NoTokenFound(), None
+                return AnalysisResult.token_detection(NoTokenFound())
                 
         except Exception as e:
             logger.error(
@@ -301,8 +302,8 @@ async def analyze_with_topic_priority(
                 error=str(e),
                 error_type=type(e).__name__
             )
-            return NoTokenFound(), None
+            return AnalysisResult.token_detection(NoTokenFound())
     
     # No analysis was performed
     logger.debug("No analysis was performed - all workflows disabled or failed")
-    return None, None
+    return AnalysisResult.no_analysis()
