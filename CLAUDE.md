@@ -680,6 +680,16 @@ class TradeActionParams(BaseModel):
 class TradeAction(BaseModel):
     action: str = "trade"               # Action type identifier
     params: TradeActionParams           # Trading parameters with leverage and risk management
+
+class NotifyActionParams(BaseModel):
+    source: str                         # Author name from tweet message
+    text: str                           # Text content from twitter message
+    createdAt: int                      # Tweet creation timestamp
+    alignment_score: Optional[int]      # Alignment score from topic sentiment analysis
+
+class NotifyAction(BaseModel):
+    action: str = "notify"              # Action type identifier
+    params: NotifyActionParams          # Notification parameters with tweet data and score
 ```
 
 ### Agent Orchestration
@@ -764,6 +774,39 @@ When topic analysis detects relevant Putin-Trump content, the system generates t
 - **Score > 7**: Aggressive trading with `leverage=7`, `margin_usd=500`
 - **All trades**: Fixed parameters - `pair="ETHUSDT"`, `side="long"`, `take_profit_percent=20`, `stop_loss_percent=12`
 - **Score N/A or None**: No trade action published
+
+### Notification System
+
+The application publishes **notification actions** for every tweet that passes topic filtering and receives a sentiment alignment score, providing complete visibility into all topic-relevant content regardless of trading thresholds.
+
+#### Notification Workflow
+
+1. **Topic Filtering**: Tweet passes `TopicFilterAgent` analysis for Putin-Trump peace talks relevance
+2. **Sentiment Analysis**: `TopicSentimentAgent` assigns alignment score (1-10 scale or None)
+3. **Automatic Publishing**: `NotifyAction` is always published when alignment data exists
+4. **Dual Publishing**: For high scores (≥ 6), both `NotifyAction` and `TradeAction` are published
+
+#### Notification Message Format
+
+```json
+{
+  "action": "notify",
+  "params": {
+    "source": "BBCBreaking",
+    "text": "Putin and Trump reach historic agreement on Ukraine conflict resolution",
+    "createdAt": 1640995200,
+    "alignment_score": 8
+  }
+}
+```
+
+#### Notification Behavior
+
+- **All topic-analyzed tweets**: Always receive notification regardless of score
+- **High alignment scores (≥ 6)**: Publish both `notify` and `trade` actions
+- **Low alignment scores (< 6)**: Publish only `notify` action
+- **No topic match**: No notification (continues with token detection workflow)
+- **Score N/A or None**: Notification published with `alignment_score: null`
 
 ### Configuration Control
 
