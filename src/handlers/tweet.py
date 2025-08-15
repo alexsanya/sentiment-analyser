@@ -1,150 +1,106 @@
 """Handler for tweet message processing."""
 
 import asyncio
-from typing import Dict, Any, List, Awaitable, Union, Tuple
+from typing import Dict, Any, List, Awaitable, Union, Tuple, Optional
 from ..config.logging_config import get_logger
 from ..core.transformation import map_tweet_data
 from ..core.sentiment_analyzer import (
-    TextSearchAgent, 
-    ImageSearchAgent, 
-    FirecrawlAgent,
-    AgentType,
-    merge_agent_results,
+    analyze_with_topic_priority,
     get_sentiment_config
 )
-from ..models.schemas import TweetOutput, SentimentAnalysisResult, NoTokenFound
+from ..models.schemas import (
+    TweetOutput, 
+    SentimentAnalysisResult, 
+    AlignmentData,
+    NoTokenFound
+)
 
 logger = get_logger(__name__)
 
 
-async def analyze_tweet_sentiment(tweet_output: TweetOutput) -> SentimentAnalysisResult:
+async def analyze_tweet_with_priority(tweet_output: TweetOutput) -> Tuple[Optional[SentimentAnalysisResult], Optional[AlignmentData]]:
     """
-    Analyze tweet content for token announcements using AI agents.
+    Analyze tweet content using topic-first priority logic.
     
     Args:
         tweet_output: Transformed tweet data
         
     Returns:
-        Merged sentiment analysis result from all agents
+        Tuple of (sentiment_result, alignment_data) where only one will be non-None
     """
     try:
-        config = get_sentiment_config()
-        model_name = config.model_name
-        firecrawl_url = config.firecrawl_mcp_server_url
-        max_concurrent = config.max_concurrent_analysis
+        logger.info("Starting analysis with topic-first priority")
         
-        # Create agents
-        text_agent = TextSearchAgent(model_name=model_name)
-        image_agent = ImageSearchAgent(model_name=model_name)
-        firecrawl_agent = FirecrawlAgent(model_name=model_name, firecrawl_url=firecrawl_url)
+        # Use the new topic priority logic
+        sentiment_result, alignment_data = await analyze_with_topic_priority(
+            text=tweet_output.text,
+            images=tweet_output.media,
+            links=tweet_output.links
+        )
         
-        # Prepare tasks for concurrent execution with agent type tracking
-        tasks: List[Tuple[AgentType, Awaitable[SentimentAnalysisResult]]] = []
+        logger.info(
+            "Topic-priority analysis completed",
+            has_sentiment_result=sentiment_result is not None,
+            has_alignment_data=alignment_data is not None,
+            sentiment_type=type(sentiment_result).__name__ if sentiment_result else None,
+            alignment_score=alignment_data.score if alignment_data else None
+        )
         
-        # Text analysis task
-        if tweet_output.text.strip():
-            tasks.append((AgentType.TEXT, text_agent.run(tweet_output.text)))
-            logger.debug("Added text analysis task", text_length=len(tweet_output.text))
-        
-        # Image analysis tasks (one per media URL)
-        for media_url in tweet_output.media:
-            if media_url.strip():
-                tasks.append((AgentType.IMAGE, image_agent.run(media_url)))
-                logger.debug("Added image analysis task", media_url=media_url)
-        
-        # URL analysis tasks (one per link)
-        for link_url in tweet_output.links:
-            if link_url.strip():
-                tasks.append((AgentType.FIRECRAWL, firecrawl_agent.run(link_url)))
-                logger.debug("Added URL analysis task", link_url=link_url)
-        
-        if not tasks:
-            logger.info("No content to analyze")
-            return NoTokenFound()
-        
-        # Execute all tasks concurrently with semaphore for concurrency control
-        semaphore = asyncio.Semaphore(max_concurrent)
-        
-        async def run_with_semaphore(agent_type: AgentType, task: Awaitable[SentimentAnalysisResult]) -> Tuple[AgentType, SentimentAnalysisResult]:
-            async with semaphore:
-                result = await task
-                return (agent_type, result)
-        
-        # Run all tasks and gather results
-        logger.info("Starting sentiment analysis", task_count=len(tasks))
-        results = await asyncio.gather(*[run_with_semaphore(agent_type, task) for agent_type, task in tasks], return_exceptions=True)
-        
-        # Filter out exceptions and convert to analysis results with agent types
-        valid_results: List[Tuple[AgentType, SentimentAnalysisResult]] = []
-        for i, result in enumerate(results):
-            if isinstance(result, Exception):
-                # Get the agent type from the original task for error logging
-                agent_type = tasks[i][0]
-                logger.error("Agent task failed", task_index=i, agent_type=agent_type.value, error=str(result))
-                valid_results.append((agent_type, NoTokenFound()))
-            else:
-                # result is guaranteed to be Tuple[AgentType, SentimentAnalysisResult] here
-                valid_results.append(result)  # type: ignore[arg-type]
-        
-        # Merge results
-        merged_result = merge_agent_results(valid_results)
-        logger.info("Sentiment analysis completed", 
-                   total_tasks=len(tasks), 
-                   valid_results=len(valid_results),
-                   result_type=type(merged_result).__name__)
-        
-        return merged_result
+        return sentiment_result, alignment_data
         
     except Exception as e:
-        logger.error("Sentiment analysis failed", error=str(e))
-        return NoTokenFound()
+        logger.error("Topic-priority analysis failed", error=str(e))
+        return NoTokenFound(), None
 
 
-async def handle_tweet_event_async(tweet_data: Dict[str, Any]) -> TweetOutput:
-    """Process tweet data with sentiment analysis and return transformed result.
+async def handle_tweet_event_async(tweet_data: Dict[str, Any]) -> Tuple[TweetOutput, Optional[AlignmentData]]:
+    """Process tweet data with topic-priority analysis and return transformed result.
     
     Args:
         tweet_data: Raw tweet data to process
         
     Returns:
-        TweetOutput object with transformed tweet data and sentiment analysis
+        Tuple of (TweetOutput with sentiment analysis, alignment_data for trade actions)
     """
     try:
         # Transform the tweet data
         transformed_data = map_tweet_data(tweet_data)
         
-        # Perform sentiment analysis
-        sentiment_result = await analyze_tweet_sentiment(transformed_data)
+        # Perform topic-priority analysis
+        sentiment_result, alignment_data = await analyze_tweet_with_priority(transformed_data)
         
-        # Add sentiment analysis to the output
-        transformed_data.sentiment_analysis = sentiment_result
+        # Add sentiment analysis to the output (only if we got a sentiment result)
+        if sentiment_result is not None:
+            transformed_data.sentiment_analysis = sentiment_result
         
         logger.info(
-            "Tweet processed successfully with sentiment analysis",
+            "Tweet processed successfully with topic-priority analysis",
             tweet_id=tweet_data.get("id"),
             author=tweet_data.get("author_name"),
-            sentiment_result_type=type(sentiment_result).__name__
+            sentiment_result_type=type(sentiment_result).__name__ if sentiment_result else None,
+            has_alignment_data=alignment_data is not None,
+            alignment_score=alignment_data.score if alignment_data else None
         )
         
-        return transformed_data
+        return transformed_data, alignment_data
         
     except Exception as e:
         logger.error(
-            "Error processing tweet data with sentiment analysis",
+            "Error processing tweet data with topic-priority analysis",
             error=str(e),
             tweet_data=tweet_data
         )
         raise
 
 
-def handle_tweet_event(tweet_data: Dict[str, Any]) -> TweetOutput:
+def handle_tweet_event(tweet_data: Dict[str, Any]) -> Tuple[TweetOutput, Optional[AlignmentData]]:
     """Process tweet data and return transformed result (synchronous wrapper).
     
     Args:
         tweet_data: Raw tweet data to process
         
     Returns:
-        TweetOutput object with transformed tweet data and sentiment analysis
+        Tuple of (TweetOutput with sentiment analysis, alignment_data for trade actions)
     """
     try:
         # Run the async version in a new event loop
@@ -162,11 +118,11 @@ def handle_tweet_event(tweet_data: Dict[str, Any]) -> TweetOutput:
             error=str(e),
             tweet_data=tweet_data
         )
-        # Fallback: return basic transformation without sentiment analysis
+        # Fallback: return basic transformation without analysis
         try:
             transformed_data = map_tweet_data(tweet_data)
             transformed_data.sentiment_analysis = NoTokenFound()
-            return transformed_data
+            return transformed_data, None
         except Exception as fallback_error:
             logger.error(
                 "Fallback transformation also failed",

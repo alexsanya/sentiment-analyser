@@ -37,8 +37,34 @@ class SnipeAction(BaseModel):
     params: SnipeActionParams = Field(..., description="Snipe action parameters")
 
 
+class TradeActionParams(BaseModel):
+    """Parameters for trade action (empty for now)"""
+    pass
+
+
+class TradeAction(BaseModel):
+    """Action message for trading based on topic sentiment"""
+    action: str = Field("trade", description="Action type")
+    params: TradeActionParams = Field(default_factory=TradeActionParams, description="Trade action parameters")
+
+
+class TopicFilter(BaseModel):
+    """Whether this is related to Trump/Putin meeting"""
+    topic_match: bool = Field(description="Whether this news match the topic (Yes or No)")
+    explanation: Optional[str] = Field(description="explanation after of Yes/No answer")
+
+
+class AlignmentData(BaseModel):
+    """How aligned Russian President Vladimir Putin and U.S. President Donald Trump after the meeting"""
+    score: Optional[int] = Field(description="how aligned are both presidents on a scale from 1 to 10, or None if score is N/A")
+    explanation: str = Field(description="explanation after your score (or N/A)")
+
+
 # Type alias for sentiment analysis results
 SentimentAnalysisResult = Union[TokenDetails, NoTokenFound, RelseaseAnnouncementWithoutDetails]
+
+# Type alias for topic analysis results
+TopicAnalysisResult = Union[TopicFilter, AlignmentData]
 
 
 class DataSource(BaseModel):

@@ -16,7 +16,8 @@ from pika.spec import Basic, BasicProperties
 
 from ..config.logging_config import get_logger
 from ..core.mq_subscriber import MQSubscriber
-from ..models.schemas import TokenDetails, SnipeAction, SnipeActionParams
+from ..models.schemas import TokenDetails, SnipeAction, SnipeActionParams, TradeAction, AlignmentData
+from ..core.sentiment_analyzer import get_trade_action
 from .tweet import handle_tweet_event
 
 logger = get_logger(__name__)
@@ -106,25 +107,30 @@ def process_message_work(
             return
         
         try:
-            # Process tweet with sentiment analysis - this may take time
+            # Process tweet with topic-priority analysis - this may take time
             logger.debug(
-                "Starting sentiment analysis",
+                "Starting topic-priority analysis",
                 thread_id=thread_id,
                 delivery_tag=delivery_tag
             )
             
-            tweet_output = handle_tweet_event(tweet_data)
+            tweet_output, alignment_data = handle_tweet_event(tweet_data)
             
             processing_time = time.time() - start_time
             logger.info(
-                "Sentiment analysis completed",
+                "Topic-priority analysis completed",
                 thread_id=thread_id,
                 delivery_tag=delivery_tag,
                 processing_time_seconds=round(processing_time, 2),
-                has_sentiment_result=tweet_output.sentiment_analysis is not None
+                has_sentiment_result=tweet_output.sentiment_analysis is not None,
+                has_alignment_data=alignment_data is not None,
+                alignment_score=alignment_data.score if alignment_data else None
             )
             
-            # Check if sentiment analysis detected token details
+            # Get actions queue name from environment
+            actions_queue = os.getenv("ACTIONS_QUEUE_NAME", "actions_to_take")
+            
+            # Check for token detection (sentiment analysis result)
             if (tweet_output.sentiment_analysis and 
                 isinstance(tweet_output.sentiment_analysis, TokenDetails)):
                 
@@ -146,9 +152,6 @@ def process_message_work(
                     token_address=token_details.token_address
                 )
                 snipe_action = SnipeAction(params=snipe_params)
-                
-                # Get actions queue name from environment
-                actions_queue = os.getenv("ACTIONS_QUEUE_NAME", "actions_to_take")
                 
                 # Publish snipe action to actions queue
                 try:
@@ -179,9 +182,51 @@ def process_message_work(
                         token_address=token_details.token_address,
                         actions_queue=actions_queue
                     )
+            
+            # Check for topic sentiment (alignment data result)
+            elif alignment_data is not None:
+                logger.info(
+                    "Topic sentiment detected - preparing trade action",
+                    thread_id=thread_id,
+                    delivery_tag=delivery_tag,
+                    alignment_score=alignment_data.score,
+                    explanation=alignment_data.explanation
+                )
+                
+                # Create trade action using mock function
+                trade_action = get_trade_action(alignment_data.score)
+                
+                # Publish trade action to actions queue
+                try:
+                    if mq_subscriber.publish(trade_action, queue_name=actions_queue):
+                        logger.info(
+                            "Trade action published successfully",
+                            thread_id=thread_id,
+                            delivery_tag=delivery_tag,
+                            alignment_score=alignment_data.score,
+                            actions_queue=actions_queue
+                        )
+                    else:
+                        logger.warning(
+                            "Failed to publish trade action",
+                            thread_id=thread_id,
+                            delivery_tag=delivery_tag,
+                            alignment_score=alignment_data.score,
+                            actions_queue=actions_queue
+                        )
+                except Exception as publish_error:
+                    logger.error(
+                        "Error publishing trade action",
+                        thread_id=thread_id,
+                        delivery_tag=delivery_tag,
+                        error=str(publish_error),
+                        alignment_score=alignment_data.score,
+                        actions_queue=actions_queue
+                    )
+            
             else:
                 logger.debug(
-                    "No token detected in message",
+                    "No actionable result detected in message",
                     thread_id=thread_id,
                     delivery_tag=delivery_tag
                 )
