@@ -13,7 +13,7 @@ from pika.spec import Basic, BasicProperties
 from pydantic import ValidationError
 from ..config.logging_config import get_logger
 from .message_buffer import MessageBuffer
-from ..models.schemas import TweetOutput, SnipeAction
+from ..models.schemas import TweetOutput, SnipeAction, TradeAction
 
 logger = get_logger(__name__)
 
@@ -278,7 +278,7 @@ class MQSubscriber:
         target_queue = queue_name or self.queue_name
         
         # Input validation and type conversion
-        if isinstance(message, (TweetOutput, SnipeAction)):
+        if isinstance(message, (TweetOutput, SnipeAction, TradeAction)):
             # Convert Pydantic model to dictionary
             message = message.model_dump()
         elif isinstance(message, dict):

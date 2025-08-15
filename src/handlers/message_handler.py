@@ -113,6 +113,8 @@ def process_message_work(
                 thread_id=thread_id,
                 delivery_tag=delivery_tag
             )
+
+            logger.info(f"Tweet data: {tweet_data}")
             
             tweet_output, alignment_data = handle_tweet_event(tweet_data)
             
