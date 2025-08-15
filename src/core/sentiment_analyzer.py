@@ -59,28 +59,26 @@ def get_trade_action(score: Optional[int]) -> Optional[TradeAction]:
         logger.debug(f"No TradeAction for score: {score} (below threshold)")
         return None
     
-    # Common parameters for all trades
-    common_params = {
-        "pair": "ETHUSDT",
-        "side": "long", 
-        "take_profit_percent": 20,
-        "stop_loss_percent": 12
-    }
-    
     if score <= 7:
         # Moderate trading for scores 6-7
         params = TradeActionParams(
+            pair="ETHUSDT",
+            side="long",
             leverage=5,
             margin_usd=300,
-            **common_params
+            take_profit_percent=70,
+            stop_loss_percent=12
         )
         logger.debug(f"Creating moderate TradeAction for score {score}: leverage=5, margin=300")
     else:
         # Aggressive trading for scores > 7
         params = TradeActionParams(
+            pair="ETHUSDT",
+            side="long",
             leverage=7,
             margin_usd=500,
-            **common_params
+            take_profit_percent=120,
+            stop_loss_percent=12
         )
         logger.debug(f"Creating aggressive TradeAction for score {score}: leverage=7, margin=500")
     

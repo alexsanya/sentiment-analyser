@@ -50,7 +50,7 @@ class TradeActionParams(BaseModel):
 class TradeAction(BaseModel):
     """Action message for trading based on topic sentiment"""
     action: str = Field("trade", description="Action type")
-    params: TradeActionParams = Field(default_factory=TradeActionParams, description="Trade action parameters")
+    params: TradeActionParams = Field(..., description="Trade action parameters")
 
 
 class TopicFilter(BaseModel):
