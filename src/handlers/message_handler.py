@@ -198,35 +198,46 @@ def process_message_work(
                     explanation=alignment_data.explanation
                 )
                 
-                # Create trade action using mock function
+                # Create trade action based on score
                 trade_action = get_trade_action(alignment_data.score)
                 
-                # Publish trade action to actions queue
-                try:
-                    if mq_subscriber.publish(trade_action, queue_name=actions_queue):
-                        logger.info(
-                            "Trade action published successfully",
+                # Only publish if trade action was created (score >= 6)
+                if trade_action is not None:
+                    # Publish trade action to actions queue
+                    try:
+                        if mq_subscriber.publish(trade_action, queue_name=actions_queue):
+                            logger.info(
+                                "Trade action published successfully",
+                                thread_id=thread_id,
+                                delivery_tag=delivery_tag,
+                                alignment_score=alignment_data.score,
+                                leverage=trade_action.params.leverage,
+                                margin_usd=trade_action.params.margin_usd,
+                                actions_queue=actions_queue
+                            )
+                        else:
+                            logger.warning(
+                                "Failed to publish trade action",
+                                thread_id=thread_id,
+                                delivery_tag=delivery_tag,
+                                alignment_score=alignment_data.score,
+                                actions_queue=actions_queue
+                            )
+                    except Exception as publish_error:
+                        logger.error(
+                            "Error publishing trade action",
                             thread_id=thread_id,
                             delivery_tag=delivery_tag,
+                            error=str(publish_error),
                             alignment_score=alignment_data.score,
                             actions_queue=actions_queue
                         )
-                    else:
-                        logger.warning(
-                            "Failed to publish trade action",
-                            thread_id=thread_id,
-                            delivery_tag=delivery_tag,
-                            alignment_score=alignment_data.score,
-                            actions_queue=actions_queue
-                        )
-                except Exception as publish_error:
-                    logger.error(
-                        "Error publishing trade action",
+                else:
+                    logger.debug(
+                        "No trade action created - score below threshold",
                         thread_id=thread_id,
                         delivery_tag=delivery_tag,
-                        error=str(publish_error),
-                        alignment_score=alignment_data.score,
-                        actions_queue=actions_queue
+                        alignment_score=alignment_data.score
                     )
             
             else:
