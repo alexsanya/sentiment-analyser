@@ -13,7 +13,7 @@ from src.handlers.message_handler import (
     ThreadedMessageProcessor,
     create_threaded_message_handler
 )
-from src.models.schemas import TokenDetails, TweetOutput, AlignmentData, AnalysisResult, TweetProcessingResult, DataSource
+from src.models.schemas import TokenDetails, TweetOutput, AlignmentData, AnalysisResult, TweetProcessingResult, DataSource, NotifyAction
 
 
 class TestThreadSafeAcknowledgment:
@@ -157,11 +157,74 @@ class TestMessageProcessingWork:
         # Verify tweet processing was called
         mock_handle_tweet.assert_called_once_with(tweet_data)
         
-        # Verify trade action was published
+        # Verify both notify action and trade action were published
+        assert mq_subscriber.publish.call_count == 2
+        
+        # First call should be notify action
+        first_call = mq_subscriber.publish.call_args_list[0]
+        notify_action = first_call[0][0]  # First positional argument
+        assert notify_action.action == "notify"
+        assert notify_action.params.source == "test"
+        assert notify_action.params.text == "Test tweet about peace talks"
+        assert notify_action.params.createdAt == 1640995200
+        assert notify_action.params.alignment_score == 8
+        
+        # Second call should be trade action
+        second_call = mq_subscriber.publish.call_args_list[1]
+        trade_action = second_call[0][0]  # First positional argument
+        assert trade_action.action == "trade"
+        
+        # Verify message was acknowledged
+        channel.connection.add_callback_threadsafe.assert_called_once()
+    
+    @patch('src.handlers.message_handler.handle_tweet_event')
+    def test_process_valid_message_with_low_alignment_score(self, mock_handle_tweet):
+        """Test processing valid message with alignment data but low score (below trading threshold)."""
+        # Setup
+        channel = Mock()
+        channel.connection = Mock()
+        delivery_tag = 123
+        mq_subscriber = Mock()
+        
+        # Mock tweet processing to return alignment data with low score
+        alignment_data = AlignmentData(
+            score=4,  # Below threshold of 6
+            explanation="Low alignment between Trump and Putin noted"
+        )
+        tweet_output = TweetOutput(
+            data_source=DataSource(name="Twitter", author_name="test_low", author_id="456"),
+            createdAt=1640995200,
+            text="Test tweet about minor disagreement",
+            media=[],
+            links=[],
+            sentiment_analysis=None
+        )
+        analysis_result = AnalysisResult.topic_sentiment(alignment_data)
+        processing_result = TweetProcessingResult(tweet_output=tweet_output, analysis=analysis_result)
+        mock_handle_tweet.return_value = processing_result
+        
+        # Mock successful publish
+        mq_subscriber.publish.return_value = True
+        
+        # Create test message
+        tweet_data = {"text": "Trump and Putin have minor disagreement", "user": {"screen_name": "test_low"}}
+        body = json.dumps(tweet_data).encode('utf-8')
+        
+        # Execute
+        process_message_work(channel, delivery_tag, body, mq_subscriber)
+        
+        # Verify tweet processing was called
+        mock_handle_tweet.assert_called_once_with(tweet_data)
+        
+        # Verify only notify action was published (no trade action for low score)
         mq_subscriber.publish.assert_called_once()
         published_call = mq_subscriber.publish.call_args
-        published_action = published_call[0][0]  # First positional argument
-        assert published_action.action == "trade"
+        notify_action = published_call[0][0]  # First positional argument
+        assert notify_action.action == "notify"
+        assert notify_action.params.source == "test_low"
+        assert notify_action.params.text == "Test tweet about minor disagreement"
+        assert notify_action.params.createdAt == 1640995200
+        assert notify_action.params.alignment_score == 4
         
         # Verify message was acknowledged
         channel.connection.add_callback_threadsafe.assert_called_once()

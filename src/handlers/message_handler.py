@@ -16,7 +16,7 @@ from pika.spec import Basic, BasicProperties
 
 from ..config.logging_config import get_logger
 from ..core.mq_subscriber import MQSubscriber
-from ..models.schemas import TokenDetails, SnipeAction, SnipeActionParams, TradeAction, AlignmentData
+from ..models.schemas import TokenDetails, SnipeAction, SnipeActionParams, TradeAction, AlignmentData, NotifyAction, NotifyActionParams
 from ..core.sentiment_analyzer import get_trade_action
 from .tweet import handle_tweet_event
 
@@ -191,14 +191,54 @@ def process_message_work(
                 alignment_data = analysis.alignment_data
                 
                 logger.info(
-                    "Topic sentiment detected - preparing trade action",
+                    "Topic sentiment detected - preparing notify and trade actions",
                     thread_id=thread_id,
                     delivery_tag=delivery_tag,
                     alignment_score=alignment_data.score,
                     explanation=alignment_data.explanation
                 )
                 
-                # Create trade action based on score
+                # Always create and publish notify action for topic-analyzed tweets
+                notify_params = NotifyActionParams(
+                    source=tweet_output.data_source.author_name,
+                    text=tweet_output.text,
+                    createdAt=tweet_output.createdAt,
+                    alignment_score=alignment_data.score
+                )
+                notify_action = NotifyAction(action="notify", params=notify_params)
+                
+                # Publish notify action to actions queue
+                try:
+                    if mq_subscriber.publish(notify_action, queue_name=actions_queue):
+                        logger.info(
+                            "Notify action published successfully",
+                            thread_id=thread_id,
+                            delivery_tag=delivery_tag,
+                            source=tweet_output.data_source.author_name,
+                            alignment_score=alignment_data.score,
+                            actions_queue=actions_queue
+                        )
+                    else:
+                        logger.warning(
+                            "Failed to publish notify action",
+                            thread_id=thread_id,
+                            delivery_tag=delivery_tag,
+                            source=tweet_output.data_source.author_name,
+                            alignment_score=alignment_data.score,
+                            actions_queue=actions_queue
+                        )
+                except Exception as publish_error:
+                    logger.error(
+                        "Error publishing notify action",
+                        thread_id=thread_id,
+                        delivery_tag=delivery_tag,
+                        error=str(publish_error),
+                        source=tweet_output.data_source.author_name,
+                        alignment_score=alignment_data.score,
+                        actions_queue=actions_queue
+                    )
+                
+                # Create trade action based on score (only if score >= 6)
                 trade_action = get_trade_action(alignment_data.score)
                 
                 # Only publish if trade action was created (score >= 6)

@@ -10,7 +10,7 @@ An AI-powered sentiment analysis microservice for cryptocurrency token detection
 - **Geopolitical Topic Analysis**: Putin-Trump peace talks sentiment analysis using Grok-4 via OpenRouter
 - **Topic-Priority Processing**: Smart workflow that prioritizes topic analysis over token detection for optimized performance
 - **Multi-Agent Architecture**: Specialized agents for text analysis, image OCR, web scraping, topic filtering, and diplomatic sentiment scoring
-- **Dual Action Publishing**: Publishes structured snipe actions (tokens) and trade actions (sentiment) to `actions_to_take` queue
+- **Triple Action Publishing**: Publishes structured snipe actions (tokens), trade actions (sentiment), and notification actions (topic awareness) to `actions_to_take` queue
 - **Blockchain Address Validation**: Supports Solana and EVM chains with comprehensive address validation
 - **Threaded RabbitMQ Processing**: High-throughput message processing with thread-per-message pattern for concurrent analysis
 - **Message Buffer System**: Thread-safe FIFO buffer prevents message loss during RabbitMQ outages
@@ -268,9 +268,17 @@ uv run pytest tests/integration/test_agents_integration.py --snapshot-update
 - **Risk Management**: Built-in leverage and margin controls with take profit and stop loss parameters
 - **Message Format**: Standardized JSON with `action: "trade"` and comprehensive trading parameters
 
+#### Notification Actions (Topic Awareness)
+- **Complete Visibility**: Every tweet passing topic filter and receiving alignment score triggers notification
+- **Universal Publishing**: Published regardless of trading threshold, ensuring no topic-relevant content is missed
+- **Tweet Context**: Includes original tweet text, author, timestamp, and alignment score
+- **Dual Publishing**: High scores (≥6) publish both `notify` and `trade` actions; low scores publish only `notify`
+- **Message Format**: Standardized JSON with `action: "notify"` and complete tweet metadata
+
 #### Queue Integration
-- **Unified Queue**: Both action types published to configurable `actions_to_take` queue
+- **Unified Queue**: All action types (snipe, trade, notify) published to configurable `actions_to_take` queue
 - **Downstream Services**: Trading and analysis services consume appropriate action types
+- **Complete Coverage**: Notification actions ensure all topic-relevant content is tracked
 - **Error Handling**: Comprehensive error handling with logging and buffering support
 
 ### Threaded Message Processing Pipeline
@@ -405,9 +413,23 @@ When topic analysis determines content relates to Putin-Trump peace talks, the s
 - **Contextual Understanding**: Leverages Grok-4's geopolitical knowledge
 - **Semantic Analysis**: Infers relevance even without explicit date/location mentions
 
-### 3. Automatic Trade Action Publishing
-When alignment data is detected with score ≥ 6, a trade action is automatically published:
+### 3. Automatic Action Publishing
+When alignment data is detected, both notification and trade actions are automatically published:
 
+**Notification Action (Always Published):**
+```json
+{
+  "action": "notify",
+  "params": {
+    "source": "BBCBreaking",
+    "text": "BREAKING: Putin and Trump reach historic agreement on Ukraine ceasefire framework after Alaska summit",
+    "createdAt": 1692118215,
+    "alignment_score": 9
+  }
+}
+```
+
+**Trade Action (Published when score ≥ 6):**
 ```json
 {
   "action": "trade",
@@ -422,18 +444,20 @@ When alignment data is detected with score ≥ 6, a trade action is automaticall
 }
 ```
 
-**Score-Based Trading Logic**:
-- **Score < 6**: No trade action published (below threshold)
-- **Score 6-7**: Moderate trading with `leverage=5`, `margin_usd=300`
-- **Score > 7**: Aggressive trading with `leverage=7`, `margin_usd=500`
+**Score-Based Action Logic**:
+- **All scores**: Notification action always published for complete visibility
+- **Score < 6**: Only notification action published (trade below threshold)
+- **Score 6-7**: Notification + moderate trading with `leverage=5`, `margin_usd=300`
+- **Score > 7**: Notification + aggressive trading with `leverage=7`, `margin_usd=500`
 - **All trades**: Fixed parameters - `pair="ETHUSDT"`, `side="long"`, `take_profit_percent=20`, `stop_loss_percent=12`
-- **Score N/A or None**: No trade action published
+- **Score N/A or None**: Only notification action published
 
 ### 4. Downstream Integration
-- **Queue**: Published to same `actions_to_take` queue as snipe actions
-- **Next Service**: Trading services consume trade actions with ready-to-use parameters
+- **Queue**: All actions published to same `actions_to_take` queue (snipe, trade, notify)
+- **Trading Services**: Consume trade actions with ready-to-use parameters
+- **Monitoring Services**: Consume notification actions for complete topic awareness
 - **Risk Management**: Pre-configured leverage, margins, and stop-loss parameters reduce downstream complexity
-- **Score Context**: Alignment score (1-10) drives automatic parameter selection for trading strategies
+- **Complete Coverage**: Notification actions ensure no topic-relevant content is missed, regardless of trading thresholds
 
 ## Logging
 
