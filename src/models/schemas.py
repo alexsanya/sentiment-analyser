@@ -38,14 +38,19 @@ class SnipeAction(BaseModel):
 
 
 class TradeActionParams(BaseModel):
-    """Parameters for trade action (empty for now)"""
-    pass
+    """Parameters for trade action"""
+    pair: str = Field(..., description="Trading pair")
+    side: str = Field(..., description="Trade side")
+    leverage: int = Field(..., description="Leverage multiplier")
+    margin_usd: int = Field(..., description="Margin amount in USD")
+    take_profit_percent: int = Field(..., description="Take profit percentage")
+    stop_loss_percent: int = Field(..., description="Stop loss percentage")
 
 
 class TradeAction(BaseModel):
     """Action message for trading based on topic sentiment"""
     action: str = Field("trade", description="Action type")
-    params: TradeActionParams = Field(default_factory=TradeActionParams, description="Trade action parameters")
+    params: TradeActionParams = Field(..., description="Trade action parameters")
 
 
 class TopicFilter(BaseModel):

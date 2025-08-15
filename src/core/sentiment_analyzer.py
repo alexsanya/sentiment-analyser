@@ -39,38 +39,50 @@ class AgentType(Enum):
     TOPIC_SENTIMENT = "topic_sentiment"
 
 
-def get_trade_action(score: Optional[int]) -> TradeAction:
+def get_trade_action(score: Optional[int]) -> Optional[TradeAction]:
     """
-    Mock function to generate trade action based on alignment score.
+    Generate trade action based on alignment score.
     
     Args:
         score: Alignment score from 1-10, or None if score is N/A
         
     Returns:
-        TradeAction with appropriate parameters based on score
+        TradeAction with appropriate parameters based on score, or None if score < 6
         
-    Note:
-        This is a mock implementation. In production, this would map scores
-        to specific trading strategies with detailed parameters.
+    Logic:
+        - score < 6: No TradeAction published (returns None)
+        - score 6-7: leverage=5, margin_usd=300
+        - score > 7: leverage=7, margin_usd=500
+        - All trades: pair="ETHUSDT", side="long", take_profit=20%, stop_loss=12%
     """
-    if score is None:
-        logger.debug("Creating TradeAction for N/A score")
-        return TradeAction(action="trade")
+    if score is None or score < 6:
+        logger.debug(f"No TradeAction for score: {score} (below threshold)")
+        return None
     
-    if score <= 3:
-        # Conservative/defensive actions for low alignment
-        logger.debug(f"Creating conservative TradeAction for low score: {score}")
-        return TradeAction(action="trade")
-    elif score <= 7:
-        # Moderate trading actions for medium alignment
-        logger.debug(f"Creating moderate TradeAction for medium score: {score}")
-        return TradeAction(action="trade")
+    if score <= 7:
+        # Moderate trading for scores 6-7
+        params = TradeActionParams(
+            pair="ETHUSDT",
+            side="long",
+            leverage=5,
+            margin_usd=300,
+            take_profit_percent=70,
+            stop_loss_percent=12
+        )
+        logger.debug(f"Creating moderate TradeAction for score {score}: leverage=5, margin=300")
     else:
-        # Aggressive/optimistic actions for high alignment
-        logger.debug(f"Creating aggressive TradeAction for high score: {score}")
-        return TradeAction(action="trade")
+        # Aggressive trading for scores > 7
+        params = TradeActionParams(
+            pair="ETHUSDT",
+            side="long",
+            leverage=7,
+            margin_usd=500,
+            take_profit_percent=120,
+            stop_loss_percent=12
+        )
+        logger.debug(f"Creating aggressive TradeAction for score {score}: leverage=7, margin=500")
     
-    # Note: All actions return empty params for now as this is a mock implementation
+    return TradeAction(action="trade", params=params)
 
 
 def _get_agent_priority(agent_type: AgentType) -> int:

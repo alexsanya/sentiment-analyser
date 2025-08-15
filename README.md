@@ -263,9 +263,10 @@ uv run pytest tests/integration/test_agents_integration.py --snapshot-update
 - **Token Parameters**: Includes chain ID, chain name, and contract address
 
 #### Trade Actions (Topic Sentiment)
-- **Diplomatic Analysis**: When Putin-Trump sentiment is detected, publishes trade actions
-- **Alignment-Based**: Action parameters based on 1-10 diplomatic alignment score
-- **Message Format**: Standardized JSON with `action: "trade"` and trading parameters
+- **Diplomatic Analysis**: When Putin-Trump sentiment is detected, publishes trade actions with score-based parameters
+- **Alignment-Based**: Trading parameters automatically adjusted based on 1-10 diplomatic alignment score
+- **Risk Management**: Built-in leverage and margin controls with take profit and stop loss parameters
+- **Message Format**: Standardized JSON with `action: "trade"` and comprehensive trading parameters
 
 #### Queue Integration
 - **Unified Queue**: Both action types published to configurable `actions_to_take` queue
@@ -405,24 +406,34 @@ When topic analysis determines content relates to Putin-Trump peace talks, the s
 - **Semantic Analysis**: Infers relevance even without explicit date/location mentions
 
 ### 3. Automatic Trade Action Publishing
-When alignment data is detected, a trade action is automatically published:
+When alignment data is detected with score ≥ 6, a trade action is automatically published:
 
 ```json
 {
   "action": "trade",
-  "params": {}
+  "params": {
+    "pair": "ETHUSDT",
+    "side": "long",
+    "leverage": 7,
+    "margin_usd": 500,
+    "take_profit_percent": 20,
+    "stop_loss_percent": 12
+  }
 }
 ```
 
-**Note**: Trade action parameters are currently mock implementation. Production would include:
-- Score-based trading strategies (1-3: conservative, 4-7: moderate, 8-10: aggressive)
-- Position sizing based on alignment confidence
-- Risk management parameters
+**Score-Based Trading Logic**:
+- **Score < 6**: No trade action published (below threshold)
+- **Score 6-7**: Moderate trading with `leverage=5`, `margin_usd=300`
+- **Score > 7**: Aggressive trading with `leverage=7`, `margin_usd=500`
+- **All trades**: Fixed parameters - `pair="ETHUSDT"`, `side="long"`, `take_profit_percent=20`, `stop_loss_percent=12`
+- **Score N/A or None**: No trade action published
 
 ### 4. Downstream Integration
 - **Queue**: Published to same `actions_to_take` queue as snipe actions
-- **Next Service**: Political analysis or trading services consume trade actions
-- **Score Context**: Alignment score (1-10) provides decision context for downstream systems
+- **Next Service**: Trading services consume trade actions with ready-to-use parameters
+- **Risk Management**: Pre-configured leverage, margins, and stop-loss parameters reduce downstream complexity
+- **Score Context**: Alignment score (1-10) drives automatic parameter selection for trading strategies
 
 ## Logging
 
