@@ -13,7 +13,7 @@ from src.handlers.message_handler import (
     ThreadedMessageProcessor,
     create_threaded_message_handler
 )
-from src.models.schemas import TokenDetails, TweetOutput, AlignmentData, AnalysisResult, TweetProcessingResult
+from src.models.schemas import TokenDetails, TweetOutput, AlignmentData, AnalysisResult, TweetProcessingResult, DataSource
 
 
 class TestThreadSafeAcknowledgment:
@@ -79,10 +79,12 @@ class TestMessageProcessingWork:
             chain_id=1,
             chain_name="Ethereum",
             token_address="0x742d35Cc6765C0532575f5A2c0a078Df8a2D4e5e",
-            is_release=True
+            is_release=True,
+            chain_defined_explicitly=True,
+            definition_fragment="Ethereum"
         )
         tweet_output = TweetOutput(
-            data_source={"name": "Twitter", "author_name": "test", "author_id": "123"},
+            data_source=DataSource(name="Twitter", author_name="test", author_id="123"),
             createdAt=1640995200,
             text="Test tweet",
             media=[],
@@ -131,7 +133,7 @@ class TestMessageProcessingWork:
             explanation="High alignment between Trump and Putin noted"
         )
         tweet_output = TweetOutput(
-            data_source={"name": "Twitter", "author_name": "test", "author_id": "123"},
+            data_source=DataSource(name="Twitter", author_name="test", author_id="123"),
             createdAt=1640995200,
             text="Test tweet about peace talks",
             media=[],
@@ -175,7 +177,7 @@ class TestMessageProcessingWork:
         
         # Mock tweet processing to return no token
         tweet_output = TweetOutput(
-            data_source={"name": "Twitter", "author_name": "test", "author_id": "123"},
+            data_source=DataSource(name="Twitter", author_name="test", author_id="123"),
             createdAt=1640995200,
             text="Test tweet",
             media=[],
@@ -264,7 +266,7 @@ class TestOnMessageCallback:
         body = b"test message"
         
         mq_subscriber = Mock()
-        threads = []
+        threads: list[threading.Thread] = []
         args = (threads, mq_subscriber)
         
         # Mock thread instance
@@ -480,10 +482,12 @@ class TestIntegration:
                 chain_id=1,
                 chain_name="Ethereum",
                 token_address="0x742d35Cc6765C0532575f5A2c0a078Df8a2D4e5e",
-                is_release=True
+                is_release=True,
+                chain_defined_explicitly=True,
+                definition_fragment="Ethereum"
             )
             tweet_output = TweetOutput(
-                data_source={"name": "Twitter", "author_name": "test", "author_id": "123"},
+                data_source=DataSource(name="Twitter", author_name="test", author_id="123"),
                 createdAt=1640995200,
                 text="Test tweet",
                 media=[],

@@ -261,11 +261,11 @@ class MQSubscriber:
             self._consumer_channel = self._consumer_connection.channel()
             self._consumer_channel.queue_declare(queue=self.consume_queue, durable=True)
     
-    def publish(self, message: Union[Dict[str, Any], TweetOutput, SnipeAction], queue_name: Optional[str] = None) -> bool:
+    def publish(self, message: Union[Dict[str, Any], TweetOutput, SnipeAction, TradeAction], queue_name: Optional[str] = None) -> bool:
         """Publish JSON message to RabbitMQ queue with automatic buffering on failure.
         
         Args:
-            message: Dictionary, TweetOutput, or SnipeAction object to be serialized as JSON and published
+            message: Dictionary, TweetOutput, SnipeAction, or TradeAction object to be serialized as JSON and published
             queue_name: Optional queue name to publish to (defaults to self.queue_name)
             
         Returns:

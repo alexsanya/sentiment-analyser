@@ -55,20 +55,20 @@ def get_trade_action(score: Optional[int]) -> TradeAction:
     """
     if score is None:
         logger.debug("Creating TradeAction for N/A score")
-        return TradeAction()
+        return TradeAction(action="trade")
     
     if score <= 3:
         # Conservative/defensive actions for low alignment
         logger.debug(f"Creating conservative TradeAction for low score: {score}")
-        return TradeAction()
+        return TradeAction(action="trade")
     elif score <= 7:
         # Moderate trading actions for medium alignment
         logger.debug(f"Creating moderate TradeAction for medium score: {score}")
-        return TradeAction()
+        return TradeAction(action="trade")
     else:
         # Aggressive/optimistic actions for high alignment
         logger.debug(f"Creating aggressive TradeAction for high score: {score}")
-        return TradeAction()
+        return TradeAction(action="trade")
     
     # Note: All actions return empty params for now as this is a mock implementation
 

@@ -29,7 +29,8 @@ class TestTweetHandler:
             createdAt=1674549890,
             text="Bitcoin is rising!",
             media=[],
-            links=[]
+            links=[],
+            sentiment_analysis=None
         )
         
         with patch('src.handlers.tweet.map_tweet_data') as mock_transform:
@@ -93,7 +94,8 @@ class TestTweetHandler:
             createdAt=1674549890,
             text="Bitcoin is rising!",
             media=[],
-            links=[]
+            links=[],
+            sentiment_analysis=None
         )
         
         with patch('src.handlers.tweet.map_tweet_data') as mock_transform:
@@ -138,7 +140,8 @@ class TestTweetHandler:
             createdAt=1753841779,
             text="Due to a massive earthquake that occurred in the Pacific Ocean, a Tsunami Warning is in effect for those living in Hawaii. A Tsunami Watch is in effect for Alaska and the Pacific Coast of the United States. Japan is also in the way. Please visit https://t.co/V5RZFDxYzl for the latest information. STAY STRONG AND STAY SAFE!",
             media=["https://pbs.twimg.com/media/GhivrlDWAAA7Ex3?format=jpg&name=medium"],
-            links=["https://tsunami.gov/"]
+            links=["https://tsunami.gov/"],
+            sentiment_analysis=None
         )
         
         with patch('src.handlers.tweet.map_tweet_data') as mock_transform:

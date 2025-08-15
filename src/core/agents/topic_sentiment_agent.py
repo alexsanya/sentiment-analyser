@@ -51,12 +51,16 @@ class TopicSentimentAgent:
         Args:
             agent_retries: Number of retry attempts for the agent
         """
+        api_key = os.getenv("OPENROUTER_API_KEY")
+        if not api_key:
+            raise ValueError("OPENROUTER_API_KEY environment variable is required for TopicSentimentAgent")
+        
         model = OpenAIModel(
             'x-ai/grok-4',
-            provider=OpenRouterProvider(api_key=os.getenv("OPENROUTER_API_KEY")),
+            provider=OpenRouterProvider(api_key=api_key),
         )
         
-        self.agent = Agent[None, AlignmentData](  # type: ignore[call-overload]
+        self.agent = Agent[None, AlignmentData](
             model=model,
             result_type=AlignmentData,
             retries=agent_retries,
@@ -110,7 +114,7 @@ class TopicSentimentAgent:
                 score=score,
                 explanation=result.output.explanation
             )
-            return cast(AlignmentData, result.output)
+            return result.output
             
         except Exception as e:
             execution_time = time.time() - start_time

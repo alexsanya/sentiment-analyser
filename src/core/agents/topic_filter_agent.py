@@ -45,12 +45,16 @@ class TopicFilterAgent:
         Args:
             agent_retries: Number of retry attempts for the agent
         """
+        api_key = os.getenv("OPENROUTER_API_KEY")
+        if not api_key:
+            raise ValueError("OPENROUTER_API_KEY environment variable is required for TopicFilterAgent")
+        
         model = OpenAIModel(
             'x-ai/grok-4',
-            provider=OpenRouterProvider(api_key=os.getenv("OPENROUTER_API_KEY")),
+            provider=OpenRouterProvider(api_key=api_key),
         )
         
-        self.agent = Agent[None, TopicFilter](  # type: ignore[call-overload]
+        self.agent = Agent[None, TopicFilter](
             model=model,
             result_type=TopicFilter,
             retries=agent_retries,
@@ -104,7 +108,7 @@ class TopicFilterAgent:
                 topic_match=topic_match,
                 explanation=result.output.explanation
             )
-            return cast(TopicFilter, result.output)
+            return result.output
             
         except Exception as e:
             execution_time = time.time() - start_time

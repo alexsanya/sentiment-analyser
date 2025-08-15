@@ -124,7 +124,8 @@ def handle_tweet_event(tweet_data: Dict[str, Any]) -> TweetProcessingResult:
         try:
             transformed_data = map_tweet_data(tweet_data)
             transformed_data.sentiment_analysis = NoTokenFound()
-            return transformed_data, None
+            fallback_analysis = AnalysisResult.token_detection(NoTokenFound())
+            return TweetProcessingResult(tweet_output=transformed_data, analysis=fallback_analysis)
         except Exception as fallback_error:
             logger.error(
                 "Fallback transformation also failed",

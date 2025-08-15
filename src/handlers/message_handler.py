@@ -10,7 +10,7 @@ import json
 import os
 import threading
 import time
-from typing import Any, List
+from typing import Any, List, Callable
 from pika.adapters.blocking_connection import BlockingChannel
 from pika.spec import Basic, BasicProperties
 
@@ -135,7 +135,7 @@ def process_message_work(
             actions_queue = os.getenv("ACTIONS_QUEUE_NAME", "actions_to_take")
             
             # Check for token detection (sentiment analysis result)
-            if analysis.has_token_detection:
+            if analysis.has_token_detection and isinstance(analysis.sentiment_result, TokenDetails):
                 
                 token_details = analysis.sentiment_result
                 
@@ -154,7 +154,7 @@ def process_message_work(
                     chain_name=token_details.chain_name,
                     token_address=token_details.token_address
                 )
-                snipe_action = SnipeAction(params=snipe_params)
+                snipe_action = SnipeAction(action="snipe", params=snipe_params)
                 
                 # Publish snipe action to actions queue
                 try:
@@ -187,17 +187,19 @@ def process_message_work(
                     )
             
             # Check for topic sentiment (alignment data result)
-            elif analysis.has_topic_sentiment:
+            elif analysis.has_topic_sentiment and analysis.alignment_data is not None:
+                alignment_data = analysis.alignment_data
+                
                 logger.info(
                     "Topic sentiment detected - preparing trade action",
                     thread_id=thread_id,
                     delivery_tag=delivery_tag,
-                    alignment_score=analysis.alignment_data.score,
-                    explanation=analysis.alignment_data.explanation
+                    alignment_score=alignment_data.score,
+                    explanation=alignment_data.explanation
                 )
                 
                 # Create trade action using mock function
-                trade_action = get_trade_action(analysis.alignment_data.score)
+                trade_action = get_trade_action(alignment_data.score)
                 
                 # Publish trade action to actions queue
                 try:
@@ -206,7 +208,7 @@ def process_message_work(
                             "Trade action published successfully",
                             thread_id=thread_id,
                             delivery_tag=delivery_tag,
-                            alignment_score=analysis.alignment_data.score,
+                            alignment_score=alignment_data.score,
                             actions_queue=actions_queue
                         )
                     else:
@@ -214,7 +216,7 @@ def process_message_work(
                             "Failed to publish trade action",
                             thread_id=thread_id,
                             delivery_tag=delivery_tag,
-                            alignment_score=analysis.alignment_data.score,
+                            alignment_score=alignment_data.score,
                             actions_queue=actions_queue
                         )
                 except Exception as publish_error:
@@ -335,7 +337,7 @@ class ThreadedMessageProcessor:
         
         logger.info("ThreadedMessageProcessor initialized")
     
-    def create_message_handler(self):
+    def create_message_handler(self) -> Callable:
         """Create a message handler function configured for threaded processing.
         
         Returns:
@@ -350,7 +352,7 @@ class ThreadedMessageProcessor:
         logger.info("Threaded message handler created")
         return message_callback
     
-    def start_processing(self):
+    def start_processing(self) -> None:
         """Start the threaded message processing system."""
         if self.is_consuming:
             logger.warning("Threaded message processor is already running")
@@ -369,7 +371,7 @@ class ThreadedMessageProcessor:
         
         logger.info("Threaded message processing started")
     
-    def stop_processing(self, timeout: float = 30.0):
+    def stop_processing(self, timeout: float = 30.0) -> None:
         """Stop processing and wait for all threads to complete.
         
         Args:
@@ -390,7 +392,7 @@ class ThreadedMessageProcessor:
         
         logger.info("Threaded message processing stopped")
     
-    def cleanup_finished_threads(self):
+    def cleanup_finished_threads(self) -> None:
         """Remove finished threads from the threads list."""
         before_count = len(self.threads)
         self.threads = [t for t in self.threads if t.is_alive()]
@@ -403,7 +405,7 @@ class ThreadedMessageProcessor:
                 active_count=after_count
             )
     
-    def wait_for_threads(self, timeout: float = 30.0):
+    def wait_for_threads(self, timeout: float = 30.0) -> None:
         """Wait for all processing threads to complete.
         
         Args:
