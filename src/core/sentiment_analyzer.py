@@ -13,6 +13,8 @@ from ..models.schemas import (
     NoTokenFound, 
     TopicFilter,
     AlignmentData,
+    MeetingAnalysis,
+    DuplicateCheckResult,
     TradeAction,
     TradeActionParams,
     AnalysisResult
@@ -21,9 +23,11 @@ from .agents import (
     TextSearchAgent, 
     ImageSearchAgent, 
     FirecrawlAgent,
-    TopicFilterAgent,
-    TopicSentimentAgent
+    TopicFilterAgent
 )
+from .agents.duplicate_detector_agent import DuplicateDetectorAgent
+from .agents.geo_expert_agent import GeoExpertAgent
+from .news_database import get_global_news_database
 from .utils import is_valid_solana_address, is_valid_evm_address
 from ..config.sentiment_config import get_sentiment_config
 from ..config.logging_config import get_logger
@@ -41,10 +45,10 @@ class AgentType(Enum):
 
 def get_trade_action(score: Optional[int]) -> Optional[TradeAction]:
     """
-    Generate trade action based on alignment score.
+    Generate trade action based on overall meeting score.
     
     Args:
-        score: Alignment score from 1-10, or None if score is N/A
+        score: Overall score from MeetingAnalysis (1-10), or None if score is N/A
         
     Returns:
         TradeAction with appropriate parameters based on score, or None if score < 6
@@ -53,7 +57,7 @@ def get_trade_action(score: Optional[int]) -> Optional[TradeAction]:
         - score < 6: No TradeAction published (returns None)
         - score 6-7: leverage=5, margin_usd=300
         - score > 7: leverage=7, margin_usd=500
-        - All trades: pair="ETHUSDT", side="long", take_profit=20%, stop_loss=12%
+        - All trades: pair="ETHUSDT", side="long", take_profit=70%/120%, stop_loss=12%
     """
     if score is None or score < 6:
         logger.debug(f"No TradeAction for score: {score} (below threshold)")
@@ -109,10 +113,11 @@ __all__ = [
     'ImageSearchAgent', 
     'FirecrawlAgent',
     'TopicFilterAgent',
-    'TopicSentimentAgent',
+    'DuplicateDetectorAgent',
+    'GeoExpertAgent',
     'AgentType',
     'merge_agent_results',
-    'analyze_with_topic_priority',
+    'analyze_with_trump_zelenskyy_workflow',
     'get_trade_action',
     'is_valid_solana_address',
     'is_valid_evm_address',
@@ -176,18 +181,19 @@ def merge_agent_results(results: List[Tuple[AgentType, SentimentAnalysisResult]]
         return NoTokenFound()
 
 
-async def analyze_with_topic_priority(
+async def analyze_with_trump_zelenskyy_workflow(
     text: str, 
     images: Optional[List[str]] = None, 
     links: Optional[List[str]] = None
 ) -> AnalysisResult:
     """
-    Analyze content with topic-first priority logic.
+    Analyze content with new Trump-Zelenskyy meeting workflow.
     
-    Priority Order:
-    1. Run topic_filter_agent to check for Putin-Trump peace talks
-    2. If topic matches: Run topic_sentiment_agent and return alignment data
-    3. If topic doesn't match: Run token detection agents and return sentiment result
+    Workflow:
+    1. Run topic_filter_agent to check for actionable Trump-Zelenskyy meeting outcomes
+    2. If topic matches: Check for duplicates against NewsDatabase
+    3. If not duplicate: Add to NewsDatabase and run geo_expert_agent analysis
+    4. If topic doesn't match: Run token detection agents
     
     Args:
         text: Tweet text content
@@ -195,7 +201,7 @@ async def analyze_with_topic_priority(
         links: List of external links (optional)
         
     Returns:
-        AnalysisResult containing either sentiment analysis or alignment data
+        AnalysisResult containing either sentiment analysis or meeting analysis data
     """
     if images is None:
         images = []
@@ -210,7 +216,7 @@ async def analyze_with_topic_priority(
         return AnalysisResult.no_analysis()
     
     logger.info(
-        "Starting analysis with topic-first priority",
+        "Starting analysis with Trump-Zelenskyy workflow",
         text_length=len(text),
         image_count=len(images),
         link_count=len(links),
@@ -231,30 +237,67 @@ async def analyze_with_topic_priority(
                 explanation=topic_result.explanation
             )
             
-            # Step 2: If topic matches, run sentiment analysis
+            # Step 2: If topic matches, check for duplicates and analyze
             if topic_result.topic_match:
-                logger.info("Topic matches Putin-Trump peace talks - running sentiment analysis")
+                logger.info("Topic matches Trump-Zelenskyy meeting - checking for duplicates")
                 
                 try:
-                    topic_sentiment_agent = TopicSentimentAgent(agent_retries=config.agent_retries)
-                    alignment_result = await topic_sentiment_agent.run(text)
+                    # Get global news database
+                    news_db = get_global_news_database()
+                    
+                    # Step 3: Check for duplicates
+                    duplicate_detector = DuplicateDetectorAgent(agent_retries=config.agent_retries)
+                    duplicate_result = await duplicate_detector.run(text, news_db)
                     
                     logger.info(
-                        "Topic sentiment analysis completed",
-                        score=alignment_result.score,
-                        explanation=alignment_result.explanation
+                        "Duplicate check completed",
+                        is_duplicate=duplicate_result.is_duplicate,
+                        database_size=news_db.size()
                     )
                     
-                    return AnalysisResult.topic_sentiment(alignment_result)
+                    if not duplicate_result.is_duplicate:
+                        # Step 4: Add to NewsDatabase and run geo expert analysis
+                        news_db.add_news(text)
+                        logger.info(
+                            "News added to database, running geo expert analysis",
+                            new_database_size=news_db.size()
+                        )
+                        
+                        # Get all news from database for analysis
+                        all_news = news_db.get_existing_news()
+                        
+                        # Step 5: Run geo expert analysis
+                        geo_expert = GeoExpertAgent(agent_retries=config.agent_retries)
+                        meeting_analysis = await geo_expert.run(all_news)
+                        
+                        logger.info(
+                            "Geo expert analysis completed",
+                            overall_score=meeting_analysis.overall_score,
+                            analyzed_outcomes=len(meeting_analysis.outcomes),
+                            overall_explanation=meeting_analysis.overall_explanation
+                        )
+                        
+                        # Create custom AnalysisResult for meeting analysis
+                        # For now, use topic_sentiment format but with meeting data
+                        alignment_data = AlignmentData(
+                            score=meeting_analysis.overall_score,
+                            explanation=meeting_analysis.overall_explanation
+                        )
+                        
+                        return AnalysisResult.topic_sentiment(alignment_data)
+                    else:
+                        logger.info("News is duplicate, skipping analysis")
+                        # Return no analysis for duplicates
+                        return AnalysisResult.no_analysis()
                     
                 except Exception as e:
                     logger.error(
-                        "Topic sentiment analysis failed",
+                        "Meeting analysis workflow failed",
                         error=str(e),
                         error_type=type(e).__name__
                     )
-                    # Return topic match but no sentiment data
-                    return AnalysisResult.topic_sentiment(AlignmentData(score=None, explanation=f"Sentiment analysis failed: {str(e)}"))
+                    # Return topic match but no analysis data
+                    return AnalysisResult.topic_sentiment(AlignmentData(score=None, explanation=f"Meeting analysis failed: {str(e)}"))
             
             else:
                 logger.debug("Topic does not match - proceeding to token detection")
@@ -267,7 +310,7 @@ async def analyze_with_topic_priority(
             )
             # Continue to token detection if topic filtering fails
     
-    # Step 3: Token detection (if enabled and topic didn't match)
+    # Step 6: Token detection (if enabled and topic didn't match)
     if config.token_detection_enabled:
         logger.info("Running token detection agents")
         
@@ -319,3 +362,18 @@ async def analyze_with_topic_priority(
     # No analysis was performed
     logger.debug("No analysis was performed - all workflows disabled or failed")
     return AnalysisResult.no_analysis()
+
+
+# Keep old function for backward compatibility, but mark as deprecated
+async def analyze_with_topic_priority(
+    text: str, 
+    images: Optional[List[str]] = None, 
+    links: Optional[List[str]] = None
+) -> AnalysisResult:
+    """
+    DEPRECATED: Use analyze_with_trump_zelenskyy_workflow instead.
+    
+    This function is kept for backward compatibility and delegates to the new workflow.
+    """
+    logger.warning("analyze_with_topic_priority is deprecated, use analyze_with_trump_zelenskyy_workflow")
+    return await analyze_with_trump_zelenskyy_workflow(text, images, links)
