@@ -34,7 +34,7 @@ class TestTweetHandler:
         )
         
         with patch('src.handlers.tweet.map_tweet_data') as mock_transform:
-            with patch('src.handlers.tweet.analyze_tweet_with_priority', new_callable=AsyncMock) as mock_analysis:
+            with patch('src.handlers.tweet.analyze_tweet_with_trump_zelenskyy', new_callable=AsyncMock) as mock_analysis:
                 mock_transform.return_value = expected_tweet_output
                 mock_analysis.return_value = AnalysisResult.token_detection(NoTokenFound())  # Return AnalysisResult
                 
@@ -99,7 +99,7 @@ class TestTweetHandler:
         )
         
         with patch('src.handlers.tweet.map_tweet_data') as mock_transform:
-            with patch('src.handlers.tweet.analyze_tweet_with_priority', new_callable=AsyncMock) as mock_analysis:
+            with patch('src.handlers.tweet.analyze_tweet_with_trump_zelenskyy', new_callable=AsyncMock) as mock_analysis:
                 with patch('src.handlers.tweet.logger') as mock_logger:
                     mock_transform.return_value = expected_tweet_output
                     mock_analysis.return_value = AnalysisResult.token_detection(NoTokenFound())
@@ -109,7 +109,7 @@ class TestTweetHandler:
                     
                     # Verify logging was called
                     mock_logger.info.assert_called_with(
-                        "Tweet processed successfully with topic-priority analysis",
+                        "Tweet processed successfully with Trump-Zelenskyy analysis",
                         tweet_id="123",
                         author="user1",  # Gets author_name from tweet_data
                         sentiment_result_type="NoTokenFound",
@@ -145,7 +145,7 @@ class TestTweetHandler:
         )
         
         with patch('src.handlers.tweet.map_tweet_data') as mock_transform:
-            with patch('src.handlers.tweet.analyze_tweet_with_priority', new_callable=AsyncMock) as mock_analysis:
+            with patch('src.handlers.tweet.analyze_tweet_with_trump_zelenskyy', new_callable=AsyncMock) as mock_analysis:
                 mock_transform.return_value = expected_tweet_output
                 mock_analysis.return_value = AnalysisResult.token_detection(NoTokenFound())
                 
@@ -182,7 +182,7 @@ class TestTweetHandler:
             "links": ["https://tsunami.gov/"]
         }
         
-        with patch('src.handlers.tweet.analyze_tweet_with_priority', new_callable=AsyncMock) as mock_analysis:
+        with patch('src.handlers.tweet.analyze_tweet_with_trump_zelenskyy', new_callable=AsyncMock) as mock_analysis:
             mock_analysis.return_value = AnalysisResult.token_detection(NoTokenFound())
             
             processing_result = handle_tweet_event(tweet_data)
