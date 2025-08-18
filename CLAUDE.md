@@ -48,7 +48,7 @@ OPENAI_API_KEY=your_key uv run pytest tests/integration/test_agents_integration.
 
 # Docker
 docker-compose up -d
-docker-compose logs -f news-watcher
+docker-compose logs -f sentiment-analyzer
 docker-compose down
 
 # RabbitMQ Management UI: http://localhost:15672 (admin/changeme)
@@ -56,10 +56,12 @@ docker-compose down
 
 ## Architecture
 
-**AI-powered sentiment analysis architecture**:
+**AI-powered sentiment analysis architecture with workflow orchestration**:
 
-- **Main Application** (`main.py`): Threaded message consumption
-- **Sentiment Analyzer** (`src/core/sentiment_analyzer.py`): Agent coordination with topic-priority logic
+- **Main Application** (`main.py`): Threaded message consumption with graceful shutdown
+- **Workflow Orchestrator** (`src/core/workflow/orchestrator.py`): Main workflow coordination and orchestration
+- **Workflow System** (`src/core/workflow/`): Modular workflow components for topic filtering, duplicate detection, token detection, and meeting analysis
+- **Sentiment Analyzer** (`src/core/sentiment_analyzer.py`): Agent coordination delegating to workflow system
 - **AI Agents** (`src/core/agents/`): PydanticAI agents for text/image/web analysis, topic filtering, duplicate detection, geopolitical analysis
 - **News Database** (`src/core/news_database.py`): Thread-safe in-memory storage for duplicate prevention
 - **MQ Subscriber** (`src/core/mq_subscriber.py`): RabbitMQ consumption/publishing with buffering
@@ -120,7 +122,19 @@ docker-compose down
 │   │   │   ├── topic_filter_agent.py # Trump-Zelenskyy meeting outcome filtering agent
 │   │   │   ├── duplicate_detector_agent.py # News duplicate detection agent
 │   │   │   ├── geo_expert_agent.py # Geopolitical expert agent for meeting analysis
+│   │   │   ├── topic_sentiment_agent.py # Legacy topic sentiment agent (deprecated)
 │   │   │   └── retry_wrapper.py # Exponential backoff retry wrapper for agents
+│   │   ├── workflow/        # Workflow orchestration system
+│   │   │   ├── __init__.py  # Workflow package exports
+│   │   │   ├── orchestrator.py # Main workflow coordinator
+│   │   │   ├── state.py     # Workflow state management
+│   │   │   ├── branches.py  # Meeting analysis and token detection branches
+│   │   │   ├── topic_filtering.py # Topic filtering workflow step
+│   │   │   ├── duplicate_detection.py # Duplicate detection workflow step
+│   │   │   ├── token_detection.py # Token detection workflow step
+│   │   │   ├── meeting_analysis.py # Meeting analysis workflow step
+│   │   │   ├── error_handling.py # Workflow error handling
+│   │   │   └── utils.py     # Workflow utilities and agent result merging
 │   │   ├── utils/           # Utility functions
 │   │   │   ├── __init__.py  # Utility exports
 │   │   │   └── address_validators.py # Blockchain address validation
@@ -147,12 +161,13 @@ docker-compose down
 │   │   ├── test_agents_integration.py # Agent integration tests
 │   │   └── test_data.py     # Test data for agent integration
 │   ├── test_mq_subscriber.py # MQSubscriber functionality tests
+│   ├── test_mq_subscriber_reconnect.py # MQSubscriber reconnection tests
 │   ├── test_rabbitmq_monitor.py # RabbitMQ connection monitor tests
 │   ├── test_message_buffer.py # MessageBuffer tests
 │   ├── test_transformation.py # Transformation pipeline tests
 │   ├── test_tweet_handler.py # Tweet handler tests
 │   ├── test_message_handler.py # Message handler tests
-│   ├── test_sentiment_analyzer.py # Sentiment analyzer tests
+│   ├── test_get_trade_action.py # Trade action generation tests
 │   ├── test_address_validators.py # Address validation tests
 │   ├── test_retry_wrapper.py # Agent retry wrapper tests
 │   └── test_main_rabbitmq.py # Main application integration tests
@@ -167,11 +182,12 @@ docker-compose down
 │   └── unit-testing-plan.md # Testing strategy documentation
 ├── logs/                    # Log files (auto-created)
 │   ├── app.log             # All log levels (INFO and above)
+│   ├── debug.log           # DEBUG level messages
 │   ├── warning.log         # WARNING level and above
 │   └── error.log           # ERROR level messages only
 ├── docker/                  # Docker-related files
 ├── mypy.ini                # MyPy type checking configuration
-├── pyproject.toml          # Project configuration and dependencies
+├── pyproject.toml          # Project configuration and dependencies (news-povered-trading)
 ├── uv.lock                 # UV lock file for reproducible builds
 ├── docker-compose.yml      # Multi-service Docker orchestration
 ├── Dockerfile             # Container build instructions
@@ -183,17 +199,22 @@ docker-compose down
 ### Environment Variables
 
 **RabbitMQ**:
-- `RABBITMQ_HOST`, `RABBITMQ_PORT`, `RABBITMQ_QUEUE`, `ACTIONS_QUEUE_NAME`
+- `RABBITMQ_HOST`, `RABBITMQ_PORT`, `RABBITMQ_QUEUE`, `RABBITMQ_CONSUME_QUEUE`, `ACTIONS_QUEUE_NAME`
+- `RABBITMQ_USERNAME`, `RABBITMQ_PASSWORD`
 - `RABBITMQ_MONITOR_ENABLED`, `RABBITMQ_MONITOR_INTERVAL`
+- `RABBITMQ_MAX_RETRY_ATTEMPTS`, `RABBITMQ_RETRY_DELAY`
 - `MESSAGE_BUFFER_ENABLED`, `MESSAGE_BUFFER_SIZE`
 
 **AI Agents**:
 - `OPENAI_API_KEY` (token detection), `OPENROUTER_API_KEY` (topic analysis)
 - `SENTIMENT_MODEL_NAME` (default: "openai:gpt-4o")
+- `FIRECRAWL_MCP_SERVER_URL`, `FIRECRAWL_API_KEY`
+- `MAX_CONCURRENT_ANALYSIS`, `AGENT_RETRIES`
 - `TOPIC_ANALYSIS_ENABLED`, `TOKEN_DETECTION_ENABLED`, `PEACE_TALKS_TOPIC_ENABLED`
 
 **Observability**:
 - `LOGFIRE_ENABLED`, `LOGFIRE_TOKEN`, `LOGFIRE_SERVICE_NAME`
+- `LOGFIRE_ENVIRONMENT`, `SERVICE_VERSION`
 
 **Blockchain Support**:
 - EVM chains (Ethereum, BSC, Polygon, Arbitrum, etc.)
@@ -202,8 +223,9 @@ docker-compose down
 ## Docker
 
 **Services**:
-- **news-watcher**: Python 3.12 slim, UV package manager
+- **sentiment-analyzer**: Python 3.12 slim, UV package manager
 - **rabbitmq**: rabbitmq:3.13-management (ports 5672/15672)
+- **firecrawl**: Node.js MCP server for web scraping (port 3000)
 - **trading_network**: Custom bridge network
 
 **Features**: Health checks, auto-restart, volume persistence, environment integration
@@ -267,11 +289,14 @@ docker-compose down
 ## Trump-Zelenskyy Meeting Analysis System
 
 **Trump-Zelenskyy Workflow** (`analyze_with_trump_zelenskyy_workflow`):
-1. `TopicFilterAgent` checks for actionable Trump-Zelenskyy meeting outcomes
-2. If topic matches → `DuplicateDetectorAgent` checks against NewsDatabase
-3. If not duplicate → Add to NewsDatabase → `GeoExpertAgent` analyzes all stored outcomes
-4. If duplicate or no topic match → token detection agents
-5. Generate appropriate actions (trade/snipe/notify)
+1. **Workflow Orchestration** (`src/core/workflow/orchestrator.py`): Main coordination and state management
+2. **Topic Filtering Step** (`src/core/workflow/topic_filtering.py`): `TopicFilterAgent` checks for actionable Trump-Zelenskyy meeting outcomes
+3. **Meeting Analysis Branch** (`src/core/workflow/branches.py`): If topic matches → duplicate detection and geopolitical analysis
+4. **Duplicate Detection Step** (`src/core/workflow/duplicate_detection.py`): `DuplicateDetectorAgent` checks against NewsDatabase
+5. **Meeting Analysis Step** (`src/core/workflow/meeting_analysis.py`): `GeoExpertAgent` analyzes all stored outcomes
+6. **Token Detection Branch** (`src/core/workflow/branches.py`): If no topic match → token detection agents
+7. **Token Detection Step** (`src/core/workflow/token_detection.py`): Coordinate text/image/web analysis agents
+8. **Action Generation**: Generate appropriate actions (trade/snipe/notify) based on analysis results
 
 **Trade Logic**:
 - Overall score ≥6: Generate trade actions (ETHUSDT long)
@@ -308,11 +333,16 @@ docker-compose down
 
 ## Testing
 
-**Categories**: Sentiment analysis, agent integration, address validation, transformation, RabbitMQ monitor, message buffer, tweet handler, integration
+**Categories**: Sentiment analysis, agent integration, address validation, transformation, RabbitMQ monitor, message buffer, tweet handler, trade action generation, retry wrapper, reconnection handling, main application integration
 
-**Coverage**: AI agent coordination, PydanticAI testing with real API calls, blockchain validation, pipeline testing, connection monitoring, thread safety, end-to-end workflows
+**Coverage**: AI agent coordination, PydanticAI testing with real API calls, blockchain validation, pipeline testing, connection monitoring, thread safety, end-to-end workflows, workflow orchestration, trade action logic
 
 **Execution**: `uv run pytest tests/ -v`, integration tests require API keys
+
+**New Test Files**:
+- `test_get_trade_action.py`: Trade action generation logic testing
+- `test_mq_subscriber_reconnect.py`: MQSubscriber reconnection behavior testing
+- `test_retry_wrapper.py`: Agent retry wrapper functionality testing
 
 
 

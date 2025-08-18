@@ -173,7 +173,19 @@ The system uses a **threaded architecture with AI-powered sentiment analysis and
 │   │   │   ├── firecrawl_agent.py # Web scraping agent
 │   │   │   ├── topic_filter_agent.py # Trump-Zelenskyy meeting outcome filtering
 │   │   │   ├── duplicate_detector_agent.py # News duplicate detection agent
-│   │   │   └── geo_expert_agent.py # Geopolitical expert for meeting analysis
+│   │   │   ├── geo_expert_agent.py # Geopolitical expert for meeting analysis
+│   │   │   ├── topic_sentiment_agent.py # Legacy topic sentiment agent (deprecated)
+│   │   │   └── retry_wrapper.py # Exponential backoff retry wrapper for agents
+│   │   ├── workflow/        # New workflow orchestration system
+│   │   │   ├── orchestrator.py # Main workflow coordinator
+│   │   │   ├── state.py     # Workflow state management
+│   │   │   ├── branches.py  # Meeting analysis and token detection branches
+│   │   │   ├── topic_filtering.py # Topic filtering workflow step
+│   │   │   ├── duplicate_detection.py # Duplicate detection workflow step
+│   │   │   ├── token_detection.py # Token detection workflow step
+│   │   │   ├── meeting_analysis.py # Meeting analysis workflow step
+│   │   │   ├── error_handling.py # Workflow error handling
+│   │   │   └── utils.py     # Workflow utilities and agent result merging
 │   │   ├── utils/           # Utility functions
 │   │   │   └── address_validators.py # Blockchain address validation
 │   │   ├── sentiment_analyzer.py # Main sentiment analysis orchestration
@@ -215,13 +227,16 @@ uv run pytest tests/ -v
 
 # Run specific test categories
 uv run pytest tests/test_mq_subscriber.py -v
+uv run pytest tests/test_mq_subscriber_reconnect.py -v
 uv run pytest tests/test_rabbitmq_monitor.py -v
 uv run pytest tests/test_transformation.py -v
 uv run pytest tests/test_message_buffer.py -v
 uv run pytest tests/test_tweet_handler.py -v
-uv run pytest tests/test_sentiment_analyzer.py -v
+uv run pytest tests/test_get_trade_action.py -v
 uv run pytest tests/test_address_validators.py -v
+uv run pytest tests/test_retry_wrapper.py -v
 uv run pytest tests/test_message_handler.py -v
+uv run pytest tests/test_main_rabbitmq.py -v
 
 # Run AI agent integration tests (requires OPENAI_API_KEY)
 OPENAI_API_KEY=your_key uv run pytest tests/integration/test_agents_integration.py -v
@@ -577,6 +592,9 @@ RABBITMQ_USERNAME=admin
 RABBITMQ_PASSWORD=changeme
 FIRECRAWL_API_KEY=your_firecrawl_key_here  # Optional
 LOGFIRE_TOKEN=your_logfire_token_here      # Optional
+LOGFIRE_SERVICE_NAME=sentiment-analyzer    # Service name for Logfire
+LOGFIRE_ENVIRONMENT=production             # Environment for Logfire
+SERVICE_VERSION=0.1.0                     # Version for observability
 
 # Workflow Control
 TOPIC_ANALYSIS_ENABLED=true
