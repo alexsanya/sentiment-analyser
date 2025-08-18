@@ -2,7 +2,6 @@
 
 import os
 import time
-from typing import cast
 from pydantic_ai import Agent, RunContext
 from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai.providers.openrouter import OpenRouterProvider
@@ -158,13 +157,16 @@ class DuplicateDetectorAgent:
             )
             
             logger.error(
-                "DuplicateDetectorAgent failed", 
-                error=str(e), 
+                "DuplicateDetectorAgent failed - returning safe default (not duplicate)", 
+                error=str(e),
+                error_type=type(e).__name__,
                 text_length=text_length,
                 execution_time=execution_time,
-                existing_news_count=news_database.size()
+                existing_news_count=news_database.size(),
+                input_preview=new_news[:100] + "..." if len(new_news) > 100 else new_news,
+                fallback_behavior="is_duplicate=False (safe default - processes news)"
             )
-            # Return default "not duplicate" result on error
+            # Return safe default "not duplicate" to ensure important news isn't missed
             return DuplicateCheckResult(is_duplicate=False)
 
 

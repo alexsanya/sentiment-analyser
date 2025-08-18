@@ -121,10 +121,13 @@ class TopicFilterAgent:
             )
             
             logger.error(
-                "TopicFilterAgent failed", 
-                error=str(e), 
+                "TopicFilterAgent failed - returning safe default (no match)", 
+                error=str(e),
+                error_type=type(e).__name__,
                 text_length=text_length,
-                execution_time=execution_time
+                execution_time=execution_time,
+                input_preview=text[:100] + "..." if text_length > 100 else text,
+                fallback_behavior="topic_match=False (safe default - skips analysis)"
             )
-            # Return default "no match" result on error
+            # Return safe default "no match" to skip processing on error
             return TopicFilter(topic_match=False, explanation=f"Error during analysis: {str(e)}")

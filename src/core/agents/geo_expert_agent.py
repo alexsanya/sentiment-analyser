@@ -2,8 +2,9 @@
 
 import os
 import time
-from typing import List
 from dataclasses import dataclass
+from typing import List
+
 from pydantic_ai import Agent
 from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai.providers.openrouter import OpenRouterProvider
@@ -142,13 +143,17 @@ class GeoExpertAgent:
             )
             
             logger.error(
-                "GeoExpertAgent failed", 
-                error=str(e), 
+                "GeoExpertAgent failed - returning safe default (score=1, no trading)", 
+                error=str(e),
+                error_type=type(e).__name__,
                 input_length=input_length,
                 execution_time=execution_time,
-                outcomes_count=outcomes_count
+                outcomes_count=outcomes_count,
+                outcomes_preview=str(outcomes[:2]) + "..." if len(outcomes) > 2 else str(outcomes),
+                fallback_behavior="overall_score=1 (below trading threshold ≥6)"
             )
-            # Return default low-score result on error
+            # Return safe default result on error (overall_score=1 prevents trading)
+            # This ensures no trade actions are triggered when analysis fails
             from ...models.schemas import OutcomeAnalysis
             return MeetingAnalysis(
                 outcomes=[
@@ -158,6 +163,6 @@ class GeoExpertAgent:
                         impact_score=1
                     )
                 ],
-                overall_score=1,
+                overall_score=1,  # Score=1 is below trading threshold (≥6), ensures safety
                 overall_explanation=f"Analysis failed: {str(e)}"
             )
