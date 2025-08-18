@@ -13,7 +13,10 @@ class NewsDatabase:
     
     This class provides a simple storage mechanism for news items with thread-safe
     operations to support concurrent access from multiple processing threads.
+    Maximum size is 500 items with FIFO overflow handling.
     """
+    
+    MAX_SIZE = 500  # Maximum number of items to store
     
     def __init__(self, existing_news: Optional[List[str]] = None):
         """
@@ -25,9 +28,14 @@ class NewsDatabase:
         self._news_items = existing_news or []
         self._lock = threading.RLock()  # Reentrant lock for thread safety
         
+        # Apply size limit if initial data exceeds maximum
+        if len(self._news_items) > self.MAX_SIZE:
+            self._news_items = self._news_items[-self.MAX_SIZE:]
+        
         logger.debug(
             "NewsDatabase initialized",
-            initial_count=len(self._news_items)
+            initial_count=len(self._news_items),
+            max_size=self.MAX_SIZE
         )
     
     def get_existing_news(self) -> List[str]:
@@ -43,6 +51,7 @@ class NewsDatabase:
     def add_news(self, news: str) -> bool:
         """
         Add new news item to database if it doesn't already exist.
+        Uses FIFO overflow when max size (500) is reached.
         
         Args:
             news: News item text to add
@@ -59,10 +68,21 @@ class NewsDatabase:
         with self._lock:
             if news not in self._news_items:
                 self._news_items.append(news)
+                
+                # Apply FIFO overflow if size limit exceeded
+                if len(self._news_items) > self.MAX_SIZE:
+                    removed_item = self._news_items.pop(0)  # Remove oldest item
+                    logger.debug(
+                        "Removed oldest news item due to size limit",
+                        removed_preview=removed_item[:50] + "..." if len(removed_item) > 50 else removed_item,
+                        max_size=self.MAX_SIZE
+                    )
+                
                 logger.debug(
                     "News item added to database",
                     news_preview=news[:100] + "..." if len(news) > 100 else news,
-                    total_count=len(self._news_items)
+                    total_count=len(self._news_items),
+                    max_size=self.MAX_SIZE
                 )
                 return True
             else:
@@ -158,24 +178,30 @@ _db_lock = threading.Lock()
 
 def get_global_news_database() -> NewsDatabase:
     """
-    Get the global NewsDatabase instance (singleton pattern).
+    Get the global NewsDatabase instance using thread-safe double-checked locking.
     
     Returns:
         Global NewsDatabase instance
     """
     global _global_news_db
     
-    with _db_lock:
-        if _global_news_db is None:
-            _global_news_db = NewsDatabase()
-            logger.info("Global NewsDatabase instance created")
-        
-        return _global_news_db
+    # First check without lock for performance
+    if _global_news_db is None:
+        with _db_lock:
+            # Double-checked locking: check again inside lock
+            if _global_news_db is None:
+                _global_news_db = NewsDatabase()
+                logger.info(
+                    "Global NewsDatabase instance created", 
+                    max_size=_global_news_db.MAX_SIZE
+                )
+    
+    return _global_news_db
 
 
 def reset_global_news_database() -> None:
     """
-    Reset the global NewsDatabase instance (useful for testing).
+    Reset the global NewsDatabase instance (useful for testing only).
     """
     global _global_news_db
     
@@ -187,25 +213,3 @@ def reset_global_news_database() -> None:
                 "Global NewsDatabase instance reset",
                 previous_size=old_size
             )
-
-
-def initialize_global_news_database(existing_news: Optional[List[str]] = None) -> NewsDatabase:
-    """
-    Initialize the global NewsDatabase with existing news items.
-    
-    Args:
-        existing_news: Optional list of existing news to initialize with
-        
-    Returns:
-        Initialized global NewsDatabase instance
-    """
-    global _global_news_db
-    
-    with _db_lock:
-        _global_news_db = NewsDatabase(existing_news)
-        logger.info(
-            "Global NewsDatabase initialized with existing news",
-            initial_count=_global_news_db.size()
-        )
-        
-        return _global_news_db

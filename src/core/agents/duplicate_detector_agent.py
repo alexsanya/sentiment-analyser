@@ -7,7 +7,8 @@ from pydantic_ai import Agent, RunContext
 from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai.providers.openrouter import OpenRouterProvider
 
-from ...models.schemas import DuplicateCheckResult, NewsDatabase
+from ...models.schemas import DuplicateCheckResult
+from ..news_database import NewsDatabase
 from ...config.logging_config import get_logger
 from ...config.logfire_config import create_logfire_span, log_agent_metrics
 

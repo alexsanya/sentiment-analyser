@@ -98,23 +98,7 @@ class MeetingAnalysis(BaseModel):
     overall_explanation: str = Field(..., min_length=1, description="Brief explanation for the overall score (1-2 sentences)")
 
 
-class NewsDatabase:
-    """Simple database to store existing news items for duplicate detection"""
-    
-    def __init__(self, existing_news: Optional[List[str]] = None):
-        self.existing_news = existing_news or []
-    
-    def get_existing_news(self) -> List[str]:
-        return self.existing_news
-    
-    def add_news(self, news: str) -> None:
-        """Add new news item to database"""
-        if news not in self.existing_news:
-            self.existing_news.append(news)
-    
-    def size(self) -> int:
-        """Get number of news items in database"""
-        return len(self.existing_news)
+# NewsDatabase is imported from core.news_database module to avoid duplication
 
 
 # Type alias for sentiment analysis results
