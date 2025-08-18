@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-AI-powered sentiment analysis microservice for cryptocurrency token detection and Putin-Trump peace talks analysis, built on RabbitMQ message processing. Uses PydanticAI agents for text/image analysis, web scraping, topic filtering, and diplomatic sentiment scoring.
+AI-powered sentiment analysis microservice for cryptocurrency token detection and Trump-Zelenskyy meeting analysis, built on RabbitMQ message processing. Uses PydanticAI agents for text/image analysis, web scraping, topic filtering, duplicate detection, and geopolitical outcome analysis.
 
 ## Technology Stack
 
@@ -60,7 +60,8 @@ docker-compose down
 
 - **Main Application** (`main.py`): Threaded message consumption
 - **Sentiment Analyzer** (`src/core/sentiment_analyzer.py`): Agent coordination with topic-priority logic
-- **AI Agents** (`src/core/agents/`): PydanticAI agents for text/image/web analysis, topic filtering, diplomatic sentiment scoring
+- **AI Agents** (`src/core/agents/`): PydanticAI agents for text/image/web analysis, topic filtering, duplicate detection, geopolitical analysis
+- **News Database** (`src/core/news_database.py`): Thread-safe in-memory storage for duplicate prevention
 - **MQ Subscriber** (`src/core/mq_subscriber.py`): RabbitMQ consumption/publishing with buffering
 - **Data Transformation** (`src/core/transformation.py`): Tweet standardization pipeline
 - **Schema Validation** (`src/models/schemas.py`): Pydantic models for data validation
@@ -74,8 +75,9 @@ docker-compose down
 - **TextSearchAgent**: Analyzes tweet text for token announcements/blockchain addresses
 - **ImageSearchAgent**: OCR text extraction from images for token info
 - **FirecrawlAgent**: Web scraping for token announcements
-- **TopicFilterAgent**: Filters Putin-Trump peace talks relevance (Grok-4)
-- **TopicSentimentAgent**: Scores diplomatic alignment 1-10 scale (Grok-4)
+- **TopicFilterAgent**: Filters Trump-Zelenskyy meeting actionable outcomes (Grok-4)
+- **DuplicateDetectorAgent**: Prevents news duplication using semantic analysis (Grok-4)
+- **GeoExpertAgent**: Analyzes meeting outcomes for geopolitical impact and peace likelihood (Grok-4)
 
 **Orchestration**: Topic-priority logic, result merging, dual-path workflows
 **Address Validation**: Solana/EVM validation with regex/crypto validation
@@ -115,13 +117,15 @@ docker-compose down
 │   │   │   ├── text_search_agent.py # Text content analysis agent
 │   │   │   ├── image_search_agent.py # Image text extraction agent
 │   │   │   ├── firecrawl_agent.py # Web scraping agent
-│   │   │   ├── topic_filter_agent.py # Putin-Trump peace talks topic filtering agent
-│   │   │   ├── topic_sentiment_agent.py # Putin-Trump alignment scoring agent
+│   │   │   ├── topic_filter_agent.py # Trump-Zelenskyy meeting outcome filtering agent
+│   │   │   ├── duplicate_detector_agent.py # News duplicate detection agent
+│   │   │   ├── geo_expert_agent.py # Geopolitical expert agent for meeting analysis
 │   │   │   └── retry_wrapper.py # Exponential backoff retry wrapper for agents
 │   │   ├── utils/           # Utility functions
 │   │   │   ├── __init__.py  # Utility exports
 │   │   │   └── address_validators.py # Blockchain address validation
 │   │   ├── sentiment_analyzer.py # Main sentiment analysis orchestration
+│   │   ├── news_database.py # Thread-safe in-memory news storage for duplicate detection
 │   │   ├── mq_subscriber.py # RabbitMQ message consumption and publishing service
 │   │   ├── message_buffer.py # Thread-safe FIFO message buffer for RabbitMQ outages
 │   │   ├── transformation.py # Tweet data transformation and standardization pipeline
@@ -156,7 +160,7 @@ docker-compose down
 │   ├── tweet-sample.json   # Sample tweet data for testing and development
 │   ├── sentiment-analyze.ipynb # Jupyter notebook for sentiment analysis examples
 │   ├── tg_bots_dialog.ipynb # Jupyter notebook for bot dialog examples
-│   ├── PeaceTalksAnalyze.ipynb # Jupyter notebook for Putin-Trump peace talks analysis examples
+│   ├── PeaceTalksAnalyze.ipynb # Jupyter notebook for Trump-Zelenskyy meeting analysis examples
 │   └── docker-compose.example.yml # Example Docker Compose configuration with environment variables
 ├── docs/                    # Documentation files
 │   ├── review-process.md   # Code review process documentation
@@ -206,21 +210,22 @@ docker-compose down
 
 ## Key Components
 
-- **Sentiment Analysis** (`src/core/sentiment_analyzer.py`): AI agent coordination
-- **AI Agents** (`src/core/agents/`): PydanticAI agents for analysis/filtering
+- **Sentiment Analysis** (`src/core/sentiment_analyzer.py`): AI agent coordination with Trump-Zelenskyy workflow
+- **AI Agents** (`src/core/agents/`): PydanticAI agents for analysis/filtering/duplicate detection
+- **News Database** (`src/core/news_database.py`): Thread-safe news storage with duplicate prevention
 - **MQ Subscriber** (`src/core/mq_subscriber.py`): RabbitMQ consumption/publishing
 - **Data Transformation** (`src/core/transformation.py`): Tweet standardization
-- **Schema Validation** (`src/models/schemas.py`): Pydantic models
+- **Schema Validation** (`src/models/schemas.py`): Pydantic models for meeting analysis
 - **Message Buffer** (`src/core/message_buffer.py`): Thread-safe FIFO buffer
-- **Message Handlers** (`src/handlers/`): Processing with dependency injection
-- **Action Publishing**: Auto-detection of tokens/sentiment → snipe/trade actions
+- **Message Handlers** (`src/handlers/`): Processing with Trump-Zelenskyy workflow integration
+- **Action Publishing**: Auto-detection of tokens/meeting outcomes → snipe/trade actions
 - **Logging**: JSON logs by level (error.log, warning.log, app.log)
 - **Graceful Shutdown**: Proper cleanup
 
 ## Action System
 
 **Snipe Actions**: Auto-published when tokens detected
-**Trade Actions**: Published for Putin-Trump sentiment (score ≥6)
+**Trade Actions**: Published for Trump-Zelenskyy meeting outcomes (score ≥6)
 **Notify Actions**: Published for all topic-relevant content
 
 **Format**: `{"action": "snipe|trade|notify", "params": {...}}`
@@ -235,8 +240,9 @@ docker-compose down
 - **FirecrawlAgent**: Web scraping for token announcements
 
 **Topic Analysis Agents**:
-- **TopicFilterAgent**: Putin-Trump peace talks filtering (Grok-4)
-- **TopicSentimentAgent**: Diplomatic alignment scoring 1-10 (Grok-4)
+- **TopicFilterAgent**: Trump-Zelenskyy meeting outcome filtering (Grok-4)
+- **DuplicateDetectorAgent**: News duplicate detection using semantic analysis (Grok-4)
+- **GeoExpertAgent**: Meeting outcome analysis for geopolitical impact (Grok-4)
 
 **Features**: Regex patterns, blockchain ID mapping, address validation (EVM/Solana)
 
@@ -244,7 +250,9 @@ docker-compose down
 
 **Token Detection**: `TokenDetails`, `NoTokenFound`, `RelseaseAnnouncementWithoutDetails`
 **Topic Analysis**: `TopicFilter` (match boolean), `AlignmentData` (score 1-10)
+**Meeting Analysis**: `DuplicateCheckResult` (boolean), `OutcomeAnalysis`, `MeetingAnalysis` (overall score 1-10)
 **Actions**: `SnipeAction`, `TradeAction`, `NotifyAction` with respective params
+**News Storage**: `NewsDatabase` class for thread-safe duplicate prevention
 
 ### Agent Orchestration
 
@@ -256,20 +264,23 @@ docker-compose down
 
 **Supported Blockchains**: Ethereum, BSC, Polygon, Arbitrum, Optimism, Avalanche, Base, Solana (+20 EVM chains)
 
-## Topic Analysis System
+## Trump-Zelenskyy Meeting Analysis System
 
-**Topic-First Priority Workflow**:
-1. `TopicFilterAgent` checks Putin-Trump relevance
-2. If match → `TopicSentimentAgent` (alignment scoring 1-10)
-3. If no match → token detection agents
-4. Generate appropriate actions (trade/snipe/notify)
+**Trump-Zelenskyy Workflow** (`analyze_with_trump_zelenskyy_workflow`):
+1. `TopicFilterAgent` checks for actionable Trump-Zelenskyy meeting outcomes
+2. If topic matches → `DuplicateDetectorAgent` checks against NewsDatabase
+3. If not duplicate → Add to NewsDatabase → `GeoExpertAgent` analyzes all stored outcomes
+4. If duplicate or no topic match → token detection agents
+5. Generate appropriate actions (trade/snipe/notify)
 
 **Trade Logic**:
-- Score ≥6: Generate trade actions (ETHUSDT long)
+- Overall score ≥6: Generate trade actions (ETHUSDT long)
 - Score 6-7: leverage=5, margin=$300
 - Score >7: leverage=7, margin=$500
 
-**Benefits**: Reduced API costs, faster processing, dual-purpose analysis
+**Duplicate Prevention**: Semantic analysis prevents redundant news processing
+**NewsDatabase**: Thread-safe in-memory storage with global singleton pattern
+**Benefits**: Reduced API costs, comprehensive analysis, duplicate prevention
 
 ## RabbitMQ Connection Monitoring
 
