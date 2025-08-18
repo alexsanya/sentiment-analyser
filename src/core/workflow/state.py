@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import List, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ...config.sentiment_config import SentimentConfig
+    from ...config.sentiment_config import SentimentAnalysisConfig
 
 
 @dataclass
@@ -13,7 +13,7 @@ class WorkflowState:
     text: str
     images: List[str]
     links: List[str]
-    config: 'SentimentConfig'
+    config: 'SentimentAnalysisConfig'
     
     @classmethod
     def initialize(cls, text: str, images: Optional[List[str]], links: Optional[List[str]]) -> 'WorkflowState':

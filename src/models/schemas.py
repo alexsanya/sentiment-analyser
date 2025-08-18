@@ -93,7 +93,7 @@ class OutcomeAnalysis(BaseModel):
 
 class MeetingAnalysis(BaseModel):
     """Comprehensive analysis of Trump-Zelenskyy meeting outcomes"""
-    outcomes: List[OutcomeAnalysis] = Field(..., min_items=1, description="List of analyzed outcomes from the Trump-Zelenskyy meeting")
+    outcomes: List[OutcomeAnalysis] = Field(..., min_length=1, description="List of analyzed outcomes from the Trump-Zelenskyy meeting")
     overall_score: int = Field(..., ge=1, le=10, description="Overall score from 1 to 10 for likelihood of peace deal or ceasefire")
     overall_explanation: str = Field(..., min_length=1, description="Brief explanation for the overall score (1-2 sentences)")
 

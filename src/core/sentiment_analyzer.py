@@ -9,7 +9,8 @@ from typing import Optional, List
 
 from ..models.schemas import (
     TradeAction,
-    TradeActionParams
+    TradeActionParams,
+    AnalysisResult
 )
 from .agents import (
     TextSearchAgent, 
@@ -101,7 +102,7 @@ async def analyze_with_topic_priority(
     text: str, 
     images: Optional[List[str]] = None, 
     links: Optional[List[str]] = None
-):
+) -> AnalysisResult:
     """
     DEPRECATED: Use analyze_with_trump_zelenskyy_workflow instead.
     
