@@ -2,14 +2,15 @@
 
 ![Cover picture](cover.png)
 
-An AI-powered sentiment analysis microservice for cryptocurrency token detection and geopolitical topic analysis, built on a threaded RabbitMQ message processing architecture. The application specializes in analyzing tweets and social media content to detect new cryptocurrency token announcements and Putin-Trump peace talks sentiment using advanced AI agents, automatically publishing snipe and trade actions for downstream systems.
+An AI-powered sentiment analysis microservice for cryptocurrency token detection and Trump-Zelenskyy meeting analysis, built on a threaded RabbitMQ message processing architecture. The application specializes in analyzing tweets and social media content to detect new cryptocurrency token announcements and Trump-Zelenskyy meeting outcomes using advanced AI agents, automatically publishing snipe and trade actions for downstream systems.
 
 ## Features
 
 - **AI-Powered Token Detection**: PydanticAI agents analyze text, images, and web content for cryptocurrency token announcements
-- **Geopolitical Topic Analysis**: Putin-Trump peace talks sentiment analysis using Grok-4 via OpenRouter
-- **Topic-Priority Processing**: Smart workflow that prioritizes topic analysis over token detection for optimized performance
-- **Multi-Agent Architecture**: Specialized agents for text analysis, image OCR, web scraping, topic filtering, and diplomatic sentiment scoring
+- **Geopolitical Meeting Analysis**: Trump-Zelenskyy meeting outcome analysis using Grok-4 via OpenRouter
+- **Duplicate Prevention**: Semantic news duplicate detection to prevent redundant analysis
+- **Topic-Priority Processing**: Smart workflow that prioritizes meeting analysis over token detection for optimized performance
+- **Multi-Agent Architecture**: Specialized agents for text analysis, image OCR, web scraping, topic filtering, duplicate detection, and geopolitical analysis
 - **Triple Action Publishing**: Publishes structured snipe actions (tokens), trade actions (sentiment), and notification actions (topic awareness) to `actions_to_take` queue
 - **Blockchain Address Validation**: Supports Solana and EVM chains with comprehensive address validation
 - **Threaded RabbitMQ Processing**: High-throughput message processing with thread-per-message pattern for concurrent analysis
@@ -88,7 +89,7 @@ Create a `.env` file with the following variables:
 ```env
 ENVIRONMENT=development  # or 'production' for JSON logs
 OPENAI_API_KEY=your_openai_api_key_here
-OPENROUTER_API_KEY=your_openrouter_api_key_here  # For topic analysis
+OPENROUTER_API_KEY=your_openrouter_api_key_here  # For meeting analysis
 ```
 
 ### RabbitMQ Configuration
@@ -127,7 +128,7 @@ AGENT_RETRIES=4                      # Retry attempts for failed operations (def
 # Workflow Control
 TOPIC_ANALYSIS_ENABLED=true          # Enable topic analysis workflow (default: true)
 TOKEN_DETECTION_ENABLED=true         # Enable token detection workflow (default: true)
-PEACE_TALKS_TOPIC_ENABLED=true       # Enable Putin-Trump peace talks analysis (default: true)
+PEACE_TALKS_TOPIC_ENABLED=true       # Enable Trump-Zelenskyy meeting analysis (default: true)
 ```
 
 ### Logfire Configuration (Optional)
@@ -147,7 +148,8 @@ The system uses a **threaded architecture with AI-powered sentiment analysis and
 
 - **Main Application** (`main.py`): Application orchestration with threaded message processing for high throughput
 - **Threaded Message Handler** (`src/handlers/message_handler.py`): Thread-per-message RabbitMQ processing with dual-action publishing
-- **AI Agent System** (`src/core/agents/` package): PydanticAI agents for text, image, web content analysis, topic filtering, and diplomatic sentiment scoring
+- **AI Agent System** (`src/core/agents/` package): PydanticAI agents for text, image, web content analysis, topic filtering, duplicate detection, and geopolitical meeting analysis
+- **News Database** (`src/core/news_database.py`): Thread-safe in-memory storage for news items with duplicate prevention
 - **Sentiment Analyzer** (`src/core/sentiment_analyzer.py`): Topic-priority agent orchestration and result merging
 - **MQ Subscriber** (`src/core/mq_subscriber.py`): RabbitMQ consumption and publishing with schema validation
 - **Data Transformation** (`src/core/transformation.py`): Tweet standardization and format conversion
@@ -169,11 +171,25 @@ The system uses a **threaded architecture with AI-powered sentiment analysis and
 │   │   │   ├── text_search_agent.py # Text content analysis agent
 │   │   │   ├── image_search_agent.py # Image text extraction agent
 │   │   │   ├── firecrawl_agent.py # Web scraping agent
-│   │   │   ├── topic_filter_agent.py # Putin-Trump peace talks topic filtering
-│   │   │   └── topic_sentiment_agent.py # Putin-Trump alignment scoring
+│   │   │   ├── topic_filter_agent.py # Trump-Zelenskyy meeting outcome filtering
+│   │   │   ├── duplicate_detector_agent.py # News duplicate detection agent
+│   │   │   ├── geo_expert_agent.py # Geopolitical expert for meeting analysis
+│   │   │   ├── topic_sentiment_agent.py # Legacy topic sentiment agent (deprecated)
+│   │   │   └── retry_wrapper.py # Exponential backoff retry wrapper for agents
+│   │   ├── workflow/        # New workflow orchestration system
+│   │   │   ├── orchestrator.py # Main workflow coordinator
+│   │   │   ├── state.py     # Workflow state management
+│   │   │   ├── branches.py  # Meeting analysis and token detection branches
+│   │   │   ├── topic_filtering.py # Topic filtering workflow step
+│   │   │   ├── duplicate_detection.py # Duplicate detection workflow step
+│   │   │   ├── token_detection.py # Token detection workflow step
+│   │   │   ├── meeting_analysis.py # Meeting analysis workflow step
+│   │   │   ├── error_handling.py # Workflow error handling
+│   │   │   └── utils.py     # Workflow utilities and agent result merging
 │   │   ├── utils/           # Utility functions
 │   │   │   └── address_validators.py # Blockchain address validation
 │   │   ├── sentiment_analyzer.py # Main sentiment analysis orchestration
+│   │   ├── news_database.py # Thread-safe news storage for duplicate detection
 │   │   ├── mq_subscriber.py # RabbitMQ message consumption and publishing service
 │   │   ├── message_buffer.py # Thread-safe FIFO message buffer
 │   │   ├── transformation.py # Tweet data transformation pipeline
@@ -182,9 +198,9 @@ The system uses a **threaded architecture with AI-powered sentiment analysis and
 │   │   ├── tweet.py         # Tweet message handler with transformation and sentiment analysis
 │   │   └── message_handler.py # Threaded RabbitMQ message handler with thread-per-message processing
 │   └── models/               # Data models and schemas
-│       └── schemas.py       # Pydantic models for tokens, tweets, actions, and topic analysis
+│       └── schemas.py       # Pydantic models for tokens, tweets, actions, meeting analysis, and duplicate detection
 ├── tests/                    # Comprehensive test suite with AI agent integration tests
-├── examples/                 # Example files and sample data (includes PeaceTalksAnalyze.ipynb)
+├── examples/                 # Example files and sample data (includes Trump-Zelenskyy analysis notebooks)
 ├── docs/                     # Documentation files
 ├── logs/                     # Log files (auto-created)
 └── docker-compose.yml        # Multi-service Docker orchestration
@@ -211,13 +227,16 @@ uv run pytest tests/ -v
 
 # Run specific test categories
 uv run pytest tests/test_mq_subscriber.py -v
+uv run pytest tests/test_mq_subscriber_reconnect.py -v
 uv run pytest tests/test_rabbitmq_monitor.py -v
 uv run pytest tests/test_transformation.py -v
 uv run pytest tests/test_message_buffer.py -v
 uv run pytest tests/test_tweet_handler.py -v
-uv run pytest tests/test_sentiment_analyzer.py -v
+uv run pytest tests/test_get_trade_action.py -v
 uv run pytest tests/test_address_validators.py -v
+uv run pytest tests/test_retry_wrapper.py -v
 uv run pytest tests/test_message_handler.py -v
+uv run pytest tests/test_main_rabbitmq.py -v
 
 # Run AI agent integration tests (requires OPENAI_API_KEY)
 OPENAI_API_KEY=your_key uv run pytest tests/integration/test_agents_integration.py -v
@@ -245,8 +264,10 @@ uv run pytest tests/integration/test_agents_integration.py --snapshot-update
 - **Chain Detection**: Supports Solana and 20+ EVM chains with automatic address validation
 
 #### Topic Analysis Agents
-- **TopicFilterAgent**: Filters tweets for Putin-Trump peace talks relevance using Grok-4
-- **TopicSentimentAgent**: Scores Putin-Trump diplomatic alignment (1-10 scale) using Grok-4
+- **TopicFilterAgent**: Filters tweets for Trump-Zelenskyy meeting actionable outcomes using Grok-4
+- **DuplicateDetectorAgent**: Prevents news duplication using semantic analysis with Grok-4
+- **GeoExpertAgent**: Analyzes meeting outcomes for geopolitical impact and peace likelihood using Grok-4
+- **News Database**: Thread-safe in-memory storage preventing duplicate analysis
 - **Geopolitical Intelligence**: Specialized analysis for diplomatic meeting outcomes
 - **News Source Optimization**: Optimized for major outlets (@BBCBreaking, @Reuters, @AP, @FoxNews)
 
@@ -262,9 +283,9 @@ uv run pytest tests/integration/test_agents_integration.py --snapshot-update
 - **Message Format**: Standardized JSON with `action: "snipe"` and token parameters
 - **Token Parameters**: Includes chain ID, chain name, and contract address
 
-#### Trade Actions (Topic Sentiment)
-- **Diplomatic Analysis**: When Putin-Trump sentiment is detected, publishes trade actions with score-based parameters
-- **Alignment-Based**: Trading parameters automatically adjusted based on 1-10 diplomatic alignment score
+#### Trade Actions (Meeting Analysis)
+- **Geopolitical Analysis**: When Trump-Zelenskyy meeting outcomes are detected, publishes trade actions with score-based parameters
+- **Outcome-Based**: Trading parameters automatically adjusted based on 1-10 overall peace likelihood score
 - **Risk Management**: Built-in leverage and margin controls with take profit and stop loss parameters
 - **Message Format**: Standardized JSON with `action: "trade"` and comprehensive trading parameters
 
@@ -350,11 +371,11 @@ OPENAI_API_KEY=your_key uv run pytest tests/integration/ -v
 
 ## Analysis Workflows
 
-The application implements **topic-priority analysis** that branches between token detection and diplomatic sentiment analysis:
+The application implements **topic-priority analysis** that branches between token detection and Trump-Zelenskyy meeting analysis with duplicate prevention:
 
 ## Token Detection Workflow (Snipe Actions)
 
-When topic analysis determines content is not related to Putin-Trump peace talks, the system runs cryptocurrency token detection:
+When topic analysis determines content is not related to Trump-Zelenskyy meeting outcomes, the system runs cryptocurrency token detection:
 
 ### 1. Tweet Processing
 ```bash
@@ -394,27 +415,29 @@ When `TokenDetails` are detected, a snipe action is automatically published:
 
 ## Topic Analysis Workflow (Trade Actions)
 
-When topic analysis determines content relates to Putin-Trump peace talks, the system runs diplomatic sentiment analysis:
+When topic analysis determines content relates to Trump-Zelenskyy meeting actionable outcomes, the system runs duplicate detection and geopolitical analysis:
 
 ### 1. Topic Filtering
 ```bash
 # Incoming news tweet from major outlet
 {
   "id": "67890",
-  "text": "BREAKING: Putin and Trump reach historic agreement on Ukraine ceasefire framework after Alaska summit",
+  "text": "BREAKING: Trump and Zelenskyy announce $50B aid package and NATO membership timeline after White House meeting",
   "author_name": "BBCBreaking",
-  "created_at": "Thu Aug 15 18:30:15 +0000 2025"
+  "created_at": "Mon Aug 18 18:30:15 +0000 2025"
 }
 ```
 
-### 2. Topic Analysis
-- **TopicFilterAgent** analyzes content for Putin-Trump meeting relevance
-- **TopicSentimentAgent** scores diplomatic alignment on 1-10 scale
+### 2. Trump-Zelenskyy Meeting Analysis
+- **TopicFilterAgent** analyzes content for Trump-Zelenskyy meeting actionable outcomes
+- **DuplicateDetectorAgent** checks against NewsDatabase to prevent duplicate analysis
+- **GeoExpertAgent** analyzes all stored outcomes for geopolitical impact (1-10 peace likelihood score)
+- **NewsDatabase** stores unique news items for comprehensive analysis
 - **Contextual Understanding**: Leverages Grok-4's geopolitical knowledge
 - **Semantic Analysis**: Infers relevance even without explicit date/location mentions
 
 ### 3. Automatic Action Publishing
-When alignment data is detected, both notification and trade actions are automatically published:
+When meeting outcomes are analyzed and not duplicates, both notification and trade actions are automatically published:
 
 **Notification Action (Always Published):**
 ```json
@@ -422,14 +445,14 @@ When alignment data is detected, both notification and trade actions are automat
   "action": "notify",
   "params": {
     "source": "BBCBreaking",
-    "text": "BREAKING: Putin and Trump reach historic agreement on Ukraine ceasefire framework after Alaska summit",
-    "createdAt": 1692118215,
-    "alignment_score": 9
+    "text": "BREAKING: Trump and Zelenskyy announce $50B aid package and NATO membership timeline after White House meeting",
+    "createdAt": 1724000215,
+    "alignment_score": 8
   }
 }
 ```
 
-**Trade Action (Published when score ≥ 6):**
+**Trade Action (Published when overall_score ≥ 6):**
 ```json
 {
   "action": "trade",
@@ -446,11 +469,12 @@ When alignment data is detected, both notification and trade actions are automat
 
 **Score-Based Action Logic**:
 - **All scores**: Notification action always published for complete visibility
-- **Score < 6**: Only notification action published (trade below threshold)
-- **Score 6-7**: Notification + moderate trading with `leverage=5`, `margin_usd=300`
-- **Score > 7**: Notification + aggressive trading with `leverage=7`, `margin_usd=500`
+- **Overall score < 6**: Only notification action published (trade below threshold)
+- **Overall score 6-7**: Notification + moderate trading with `leverage=5`, `margin_usd=300`
+- **Overall score > 7**: Notification + aggressive trading with `leverage=7`, `margin_usd=500`
 - **All trades**: Fixed parameters - `pair="ETHUSDT"`, `side="long"`, `take_profit_percent=20`, `stop_loss_percent=12`
-- **Score N/A or None**: Only notification action published
+- **Duplicates**: No actions published (duplicate prevention)
+- **Overall score N/A or None**: Only notification action published
 
 ### 4. Downstream Integration
 - **Queue**: All actions published to same `actions_to_take` queue (snipe, trade, notify)
@@ -563,16 +587,19 @@ All configuration from your `.env` file is automatically passed to containers:
 # Example .env for Docker deployment
 ENVIRONMENT=production
 OPENAI_API_KEY=your_openai_api_key_here
-OPENROUTER_API_KEY=your_openrouter_api_key_here  # For topic analysis
+OPENROUTER_API_KEY=your_openrouter_api_key_here  # For meeting analysis
 RABBITMQ_USERNAME=admin
 RABBITMQ_PASSWORD=changeme
 FIRECRAWL_API_KEY=your_firecrawl_key_here  # Optional
 LOGFIRE_TOKEN=your_logfire_token_here      # Optional
+LOGFIRE_SERVICE_NAME=sentiment-analyzer    # Service name for Logfire
+LOGFIRE_ENVIRONMENT=production             # Environment for Logfire
+SERVICE_VERSION=0.1.0                     # Version for observability
 
 # Workflow Control
 TOPIC_ANALYSIS_ENABLED=true
 TOKEN_DETECTION_ENABLED=true
-PEACE_TALKS_TOPIC_ENABLED=true
+PEACE_TALKS_TOPIC_ENABLED=true  # Enable Trump-Zelenskyy meeting analysis
 ```
 
 ### Service Health Monitoring

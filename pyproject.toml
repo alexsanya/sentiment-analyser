@@ -30,3 +30,8 @@ asyncio_mode = "auto"
 log_cli = false
 log_cli_level = "INFO"
 log_auto_indent = true
+
+[dependency-groups]
+dev = [
+    "jupyter>=1.1.1",
+]

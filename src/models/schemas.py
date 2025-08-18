@@ -68,7 +68,7 @@ class NotifyAction(BaseModel):
 
 
 class TopicFilter(BaseModel):
-    """Whether this is related to Trump/Putin meeting"""
+    """Whether this is related to Trump/Zelenskyy meeting"""
     topic_match: bool = Field(description="Whether this news match the topic (Yes or No)")
     explanation: Optional[str] = Field(description="explanation after of Yes/No answer")
 
@@ -77,6 +77,28 @@ class AlignmentData(BaseModel):
     """How aligned Russian President Vladimir Putin and U.S. President Donald Trump after the meeting"""
     score: Optional[int] = Field(description="how aligned are both presidents on a scale from 1 to 10, or None if score is N/A")
     explanation: str = Field(description="explanation after your score (or N/A)")
+
+
+class DuplicateCheckResult(BaseModel):
+    """Result of duplicate check - returns only a boolean value"""
+    is_duplicate: bool = Field(description="True if the news is duplicate, False if it's unique")
+
+
+class OutcomeAnalysis(BaseModel):
+    """Analysis of individual actionable outcome from Trump-Zelenskyy meeting"""
+    description: str = Field(..., min_length=1, description="Description of the actionable outcome from the meeting")
+    significance: str = Field(..., min_length=1, description="Brief analysis of the outcome's significance (1-2 sentences)")
+    impact_score: int = Field(..., ge=1, le=10, description="Impact score from 1 to 10 for the outcome's effect on peace or ceasefire")
+
+
+class MeetingAnalysis(BaseModel):
+    """Comprehensive analysis of Trump-Zelenskyy meeting outcomes"""
+    outcomes: List[OutcomeAnalysis] = Field(..., min_length=1, description="List of analyzed outcomes from the Trump-Zelenskyy meeting")
+    overall_score: int = Field(..., ge=1, le=10, description="Overall score from 1 to 10 for likelihood of peace deal or ceasefire")
+    overall_explanation: str = Field(..., min_length=1, description="Brief explanation for the overall score (1-2 sentences)")
+
+
+# NewsDatabase is imported from core.news_database module to avoid duplication
 
 
 # Type alias for sentiment analysis results

@@ -16,18 +16,15 @@ logger = get_logger(__name__)
 TOPIC_FILTER_PROMPT = '''
 ## Role
 You are an AI classifier specialized in analyzing news tweets.
-Your task is to determine if a given tweet from one of the following mass media accounts @BBCBreaking, @Reuters, @AP, or @FoxNews
-is related to the outcome of the meeting between Russian President Vladimir Putin and U.S. President Donald Trump,
-which occurred on August 15, 2025, at Joint Base Elmendorf-Richardson in Anchorage, Alaska.
-This summit focused on topics like a potential ceasefire in the Russia-Ukraine war.
+Your task is to determine if a given tweet from one of the following mass media accounts—@BBCBreaking, @Reuters, @AP, @Axios, or @FoxNews—is related to concrete, actionable outcomes of the meeting between U.S. President Donald Trump and Ukrainian President Volodymyr Zelenskyy, scheduled for August 18, 2025, at the White House in Washington, D.C., focusing on ending Russia's war in Ukraine.
 
 ## Input
 You will receive the text of a single tweet as input. Assume it is from one of the listed accounts.
 
 ## Output
 Respond with exactly one of the following:
-    "Yes" if the tweet is related to the meeting's outcome (e.g., decisions, agreements, statements, reactions, or results from the summit). Use semantic and contextual analysis to infer relevance, even if the date, location, or explicit terms like "summit" or "meeting" are omitted. For example, references to Putin-Trump talks, Russia-US diplomacy, Ukraine ceasefire announcements, or post-meeting developments could qualify.
-    "No" if the tweet is unrelated (e.g., about other events, general news, or topics not tied to this specific meeting's results).
+    - "Yes" if the tweet describes specific, actionable outcomes of the Trump-Zelenskyy meeting, such as concrete agreements, measurable commitments, or real policy changes (e.g., signed deals, ceasefire terms, funding pledges, or troop deployments). Use semantic and contextual analysis to confirm relevance, even if the date, location, or terms like "meeting" are omitted.
+- "No" if the tweet is unrelated or only mentions ceremonial aspects (e.g., photo ops, handshakes, or general statements without actionable results).
 
 Provide a brief 1-2 sentence explanation after your Yes/No answer, justifying your decision based on key elements in the tweet. Do not output anything else.
 '''
@@ -35,7 +32,7 @@ Provide a brief 1-2 sentence explanation after your Yes/No answer, justifying yo
 
 class TopicFilterAgent:
     """
-    A PydanticAI agent that analyzes text to determine if it relates to Putin-Trump peace talks
+    A PydanticAI agent that analyzes text to determine if it relates to actionable outcomes from Trump-Zelenskyy meetings
     """
     
     def __init__(self, agent_retries: int = 3):
@@ -63,7 +60,7 @@ class TopicFilterAgent:
     
     async def run(self, text: str) -> TopicFilter:
         """
-        Process text to detect if it relates to Putin-Trump peace talks.
+        Process text to detect if it relates to actionable outcomes from Trump-Zelenskyy meetings.
         
         Args:
             text: The given text
@@ -124,10 +121,13 @@ class TopicFilterAgent:
             )
             
             logger.error(
-                "TopicFilterAgent failed", 
-                error=str(e), 
+                "TopicFilterAgent failed - returning safe default (no match)", 
+                error=str(e),
+                error_type=type(e).__name__,
                 text_length=text_length,
-                execution_time=execution_time
+                execution_time=execution_time,
+                input_preview=text[:100] + "..." if text_length > 100 else text,
+                fallback_behavior="topic_match=False (safe default - skips analysis)"
             )
-            # Return default "no match" result on error
+            # Return safe default "no match" to skip processing on error
             return TopicFilter(topic_match=False, explanation=f"Error during analysis: {str(e)}")
