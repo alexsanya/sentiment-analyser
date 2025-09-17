@@ -1,6 +1,6 @@
 """Shared schema definitions for message validation."""
 
-from typing import List, Any, Optional, Union
+from typing import List, Any, Optional, Union, Literal
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -58,7 +58,8 @@ class NotifyActionParams(BaseModel):
     source: str = Field(..., description="Author name from tweet message")
     text: str = Field(..., description="Text content from twitter message")
     createdAt: int = Field(..., description="Tweet creation timestamp")
-    alignment_score: Optional[int] = Field(None, description="Alignment score from topic sentiment analysis")
+    fed_decision: Optional[str] = Field(None, description="Federal Reserve decision from analysis")
+    basis_points: Optional[str] = Field(None, description="Basis points change from FED decision")
 
 
 class NotifyAction(BaseModel):
@@ -67,29 +68,23 @@ class NotifyAction(BaseModel):
     params: NotifyActionParams = Field(..., description="Notify action parameters")
 
 
-class TopicFilter(BaseModel):
-    """Whether this is related to Trump/Putin meeting"""
-    topic_match: bool = Field(description="Whether this news match the topic (Yes or No)")
-    explanation: Optional[str] = Field(description="explanation after of Yes/No answer")
-
-
-class AlignmentData(BaseModel):
-    """How aligned Russian President Vladimir Putin and U.S. President Donald Trump after the meeting"""
-    score: Optional[int] = Field(description="how aligned are both presidents on a scale from 1 to 10, or None if score is N/A")
-    explanation: str = Field(description="explanation after your score (or N/A)")
+class FEDDecision(BaseModel):
+    """Federal Reserve FOMC interest rate decision analysis"""
+    decision: Literal["UP", "DOWN", "None"] = Field(description="Interest rate decision direction")
+    points: str = Field(description="Basis points change as integer, or 'None' if not applicable")
 
 
 # Type alias for sentiment analysis results
 SentimentAnalysisResult = Union[TokenDetails, NoTokenFound, RelseaseAnnouncementWithoutDetails]
 
-# Type alias for topic analysis results
-TopicAnalysisResult = Union[TopicFilter, AlignmentData]
+# Type alias for FED decision analysis results
+FEDAnalysisResult = FEDDecision
 
 
 class AnalysisResult(BaseModel):
     """Container for analysis results with clear field names."""
     sentiment_result: Optional[SentimentAnalysisResult] = Field(None, description="Token detection analysis result")
-    alignment_data: Optional[AlignmentData] = Field(None, description="Topic sentiment analysis result")
+    fed_decision: Optional[FEDDecision] = Field(None, description="Federal Reserve decision analysis result")
     
     @property
     def has_token_detection(self) -> bool:
@@ -98,39 +93,39 @@ class AnalysisResult(BaseModel):
                 not isinstance(self.sentiment_result, NoTokenFound))
     
     @property
-    def has_topic_sentiment(self) -> bool:
-        """Check if result contains topic sentiment data."""
-        return self.alignment_data is not None
+    def has_fed_decision(self) -> bool:
+        """Check if result contains FED decision data."""
+        return self.fed_decision is not None
     
     @property
     def analysis_type(self) -> str:
         """Get the type of analysis performed."""
         if self.has_token_detection:
             return "token_detection"
-        elif self.has_topic_sentiment:
-            return "topic_sentiment"
+        elif self.has_fed_decision:
+            return "fed_decision"
         else:
             return "no_analysis"
     
     @property
     def has_actionable_result(self) -> bool:
         """Check if result has actionable data for publishing actions."""
-        return self.has_token_detection or self.has_topic_sentiment
+        return self.has_token_detection or self.has_fed_decision
     
     @classmethod
     def token_detection(cls, result: SentimentAnalysisResult) -> 'AnalysisResult':
         """Create result with token detection data."""
-        return cls(sentiment_result=result, alignment_data=None)
-    
+        return cls(sentiment_result=result, fed_decision=None)
+
     @classmethod
-    def topic_sentiment(cls, data: AlignmentData) -> 'AnalysisResult':
-        """Create result with topic sentiment data."""
-        return cls(sentiment_result=None, alignment_data=data)
-    
+    def fed_decision(cls, data: FEDDecision) -> 'AnalysisResult':
+        """Create result with FED decision data."""
+        return cls(sentiment_result=None, fed_decision=data)
+
     @classmethod
     def no_analysis(cls) -> 'AnalysisResult':
         """Create result with no analysis data."""
-        return cls(sentiment_result=None, alignment_data=None)
+        return cls(sentiment_result=None, fed_decision=None)
 
 
 class DataSource(BaseModel):

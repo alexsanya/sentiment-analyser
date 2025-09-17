@@ -9,20 +9,18 @@ from enum import Enum
 from typing import List, Tuple, Optional
 
 from ..models.schemas import (
-    SentimentAnalysisResult, 
-    NoTokenFound, 
-    TopicFilter,
-    AlignmentData,
+    SentimentAnalysisResult,
+    NoTokenFound,
+    FEDDecision,
     TradeAction,
     TradeActionParams,
     AnalysisResult
 )
 from .agents import (
-    TextSearchAgent, 
-    ImageSearchAgent, 
+    TextSearchAgent,
+    ImageSearchAgent,
     FirecrawlAgent,
-    TopicFilterAgent,
-    TopicSentimentAgent
+    FEDDecisionAgent
 )
 from .utils import is_valid_solana_address, is_valid_evm_address
 from ..config.sentiment_config import get_sentiment_config
@@ -35,53 +33,63 @@ class AgentType(Enum):
     TEXT = "text"
     IMAGE = "image"
     FIRECRAWL = "firecrawl"
-    TOPIC_FILTER = "topic_filter"
-    TOPIC_SENTIMENT = "topic_sentiment"
+    FED_DECISION = "fed_decision"
 
 
-def get_trade_action(score: Optional[int]) -> Optional[TradeAction]:
+def get_trade_action(fed_decision: Optional[FEDDecision]) -> Optional[TradeAction]:
     """
-    Generate trade action based on alignment score.
-    
+    Generate trade action based on Federal Reserve decision.
+
     Args:
-        score: Alignment score from 1-10, or None if score is N/A
-        
+        fed_decision: FEDDecision containing direction and basis points
+
     Returns:
-        TradeAction with appropriate parameters based on score, or None if score < 6
-        
+        TradeAction with appropriate parameters based on rate cuts, or None if no cut
+
     Logic:
-        - score < 6: No TradeAction published (returns None)
-        - score 6-7: leverage=5, margin_usd=300
-        - score > 7: leverage=7, margin_usd=500
+        - No trade action if rates haven't been lowered (decision != "DOWN")
+        - Moderate trading for 25 basis points cut: leverage=5, margin_usd=300
+        - Aggressive trading for >25 basis points cut: leverage=7, margin_usd=500
         - All trades: pair="ETHUSDT", side="long", take_profit=20%, stop_loss=12%
     """
-    if score is None or score < 6:
-        logger.debug(f"No TradeAction for score: {score} (below threshold)")
+    if not fed_decision or fed_decision.decision != "DOWN":
+        logger.debug(f"No TradeAction for FED decision: {fed_decision.decision if fed_decision else 'None'} (not a rate cut)")
         return None
-    
-    if score <= 7:
-        # Moderate trading for scores 6-7
+
+    # Parse basis points
+    try:
+        if fed_decision.points == "None" or not fed_decision.points:
+            logger.debug("No TradeAction: basis points not specified")
+            return None
+
+        basis_points = int(fed_decision.points)
+    except (ValueError, TypeError):
+        logger.debug(f"No TradeAction: invalid basis points format: {fed_decision.points}")
+        return None
+
+    if basis_points <= 25:
+        # Moderate trading for 25 basis points cut
         params = TradeActionParams(
             pair="ETHUSDT",
             side="long",
             leverage=5,
             margin_usd=300,
-            take_profit_percent=70,
+            take_profit_percent=20,
             stop_loss_percent=12
         )
-        logger.debug(f"Creating moderate TradeAction for score {score}: leverage=5, margin=300")
+        logger.debug(f"Creating moderate TradeAction for {basis_points}bp cut: leverage=5, margin=300")
     else:
-        # Aggressive trading for scores > 7
+        # Aggressive trading for >25 basis points cut
         params = TradeActionParams(
             pair="ETHUSDT",
             side="long",
             leverage=7,
             margin_usd=500,
-            take_profit_percent=120,
+            take_profit_percent=20,
             stop_loss_percent=12
         )
-        logger.debug(f"Creating aggressive TradeAction for score {score}: leverage=7, margin=500")
-    
+        logger.debug(f"Creating aggressive TradeAction for {basis_points}bp cut: leverage=7, margin=500")
+
     return TradeAction(action="trade", params=params)
 
 
@@ -106,13 +114,12 @@ def _get_agent_priority(agent_type: AgentType) -> int:
 # Re-export for backward compatibility
 __all__ = [
     'TextSearchAgent',
-    'ImageSearchAgent', 
+    'ImageSearchAgent',
     'FirecrawlAgent',
-    'TopicFilterAgent',
-    'TopicSentimentAgent',
+    'FEDDecisionAgent',
     'AgentType',
     'merge_agent_results',
-    'analyze_with_topic_priority',
+    'analyze_with_fed_priority',
     'get_trade_action',
     'is_valid_solana_address',
     'is_valid_evm_address',
@@ -176,125 +183,103 @@ def merge_agent_results(results: List[Tuple[AgentType, SentimentAnalysisResult]]
         return NoTokenFound()
 
 
-async def analyze_with_topic_priority(
-    text: str, 
-    images: Optional[List[str]] = None, 
+async def analyze_with_fed_priority(
+    text: str,
+    images: Optional[List[str]] = None,
     links: Optional[List[str]] = None
 ) -> AnalysisResult:
     """
-    Analyze content with topic-first priority logic.
-    
+    Analyze content with FED decision priority logic.
+
     Priority Order:
-    1. Run topic_filter_agent to check for Putin-Trump peace talks
-    2. If topic matches: Run topic_sentiment_agent and return alignment data
-    3. If topic doesn't match: Run token detection agents and return sentiment result
-    
+    1. Run FED decision agent to check for Federal Reserve rate decisions
+    2. If FED decision found: Return FED decision data
+    3. If no FED decision: Run token detection agents and return sentiment result
+
     Args:
         text: Tweet text content
         images: List of image URLs (optional)
         links: List of external links (optional)
-        
+
     Returns:
-        AnalysisResult containing either sentiment analysis or alignment data
+        AnalysisResult containing either FED decision or token detection analysis
     """
     if images is None:
         images = []
     if links is None:
         links = []
-        
+
     config = get_sentiment_config()
-    
+
     # Check if workflows are enabled
-    if not config.topic_analysis_enabled and not config.token_detection_enabled:
-        logger.warning("Both topic analysis and token detection are disabled")
+    if not config.fed_analysis_enabled and not config.token_detection_enabled:
+        logger.warning("Both FED analysis and token detection are disabled")
         return AnalysisResult.no_analysis()
-    
+
     logger.info(
-        "Starting analysis with topic-first priority",
+        "Starting analysis with FED-first priority",
         text_length=len(text),
         image_count=len(images),
         link_count=len(links),
-        topic_analysis_enabled=config.topic_analysis_enabled,
-        token_detection_enabled=config.token_detection_enabled,
-        peace_talks_enabled=config.peace_talks_topic_enabled
+        fed_analysis_enabled=config.fed_analysis_enabled,
+        token_detection_enabled=config.token_detection_enabled
     )
-    
-    # Step 1: Topic filtering (if enabled)
-    if config.topic_analysis_enabled and config.peace_talks_topic_enabled:
+
+    # Step 1: FED decision analysis (if enabled)
+    if config.fed_analysis_enabled:
         try:
-            topic_filter_agent = TopicFilterAgent(agent_retries=config.agent_retries)
-            topic_result = await topic_filter_agent.run(text)
-            
+            fed_decision_agent = FEDDecisionAgent(agent_retries=config.agent_retries)
+            fed_result = await fed_decision_agent.run(text)
+
             logger.info(
-                "Topic filtering completed",
-                topic_match=topic_result.topic_match,
-                explanation=topic_result.explanation
+                "FED decision analysis completed",
+                decision=fed_result.decision,
+                points=fed_result.points
             )
-            
-            # Step 2: If topic matches, run sentiment analysis
-            if topic_result.topic_match:
-                logger.info("Topic matches Putin-Trump peace talks - running sentiment analysis")
-                
-                try:
-                    topic_sentiment_agent = TopicSentimentAgent(agent_retries=config.agent_retries)
-                    alignment_result = await topic_sentiment_agent.run(text)
-                    
-                    logger.info(
-                        "Topic sentiment analysis completed",
-                        score=alignment_result.score,
-                        explanation=alignment_result.explanation
-                    )
-                    
-                    return AnalysisResult.topic_sentiment(alignment_result)
-                    
-                except Exception as e:
-                    logger.error(
-                        "Topic sentiment analysis failed",
-                        error=str(e),
-                        error_type=type(e).__name__
-                    )
-                    # Return topic match but no sentiment data
-                    return AnalysisResult.topic_sentiment(AlignmentData(score=None, explanation=f"Sentiment analysis failed: {str(e)}"))
-            
+
+            # If FED decision detected, return it
+            if fed_result.decision != "None":
+                logger.info("FED decision detected - returning FED analysis result")
+                return AnalysisResult.fed_decision(fed_result)
             else:
-                logger.debug("Topic does not match - proceeding to token detection")
-                
+                logger.debug("No FED decision detected - proceeding to token detection")
+
         except Exception as e:
             logger.error(
-                "Topic filtering failed",
+                "FED decision analysis failed",
                 error=str(e),
                 error_type=type(e).__name__
             )
-            # Continue to token detection if topic filtering fails
-    
-    # Step 3: Token detection (if enabled and topic didn't match)
+            # Continue to token detection if FED analysis fails
+
+    # Step 2: Token detection (if enabled and no FED decision found)
     if config.token_detection_enabled:
         logger.info("Running token detection agents")
-        
+
         try:
             # Run existing token detection logic
             agent_results = []
-            
+
             # Text analysis
             if text.strip():
                 text_agent = TextSearchAgent(config.model_name)
                 text_result = await text_agent.run(text)
                 agent_results.append((AgentType.TEXT, text_result))
-            
+
             # Image analysis
             for image_url in images:
                 if image_url.strip():
                     image_agent = ImageSearchAgent(config.model_name)
                     image_result = await image_agent.run(image_url)
                     agent_results.append((AgentType.IMAGE, image_result))
-            
+
             # Link analysis
             for link_url in links:
                 if link_url.strip():
                     firecrawl_agent = FirecrawlAgent(config.model_name, config.firecrawl_mcp_server_url)
                     firecrawl_result = await firecrawl_agent.run(link_url)
                     agent_results.append((AgentType.FIRECRAWL, firecrawl_result))
-            
+
             # Merge token detection results
             if agent_results:
                 merged_result = merge_agent_results(agent_results)
@@ -307,7 +292,7 @@ async def analyze_with_topic_priority(
             else:
                 logger.debug("No token detection agents were run")
                 return AnalysisResult.token_detection(NoTokenFound())
-                
+
         except Exception as e:
             logger.error(
                 "Token detection failed",
@@ -315,7 +300,7 @@ async def analyze_with_topic_priority(
                 error_type=type(e).__name__
             )
             return AnalysisResult.token_detection(NoTokenFound())
-    
+
     # No analysis was performed
     logger.debug("No analysis was performed - all workflows disabled or failed")
     return AnalysisResult.no_analysis()

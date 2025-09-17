@@ -14,9 +14,8 @@ DEFAULT_FIRECRAWL_URL = "http://localhost:3000/sse"
 DEFAULT_MAX_CONCURRENT = 5
 
 # Workflow control defaults
-DEFAULT_TOPIC_ANALYSIS_ENABLED = True
+DEFAULT_FED_ANALYSIS_ENABLED = True
 DEFAULT_TOKEN_DETECTION_ENABLED = True
-DEFAULT_PEACE_TALKS_TOPIC_ENABLED = True
 
 # Chain IDs and patterns for blockchain identification
 CHAIN_IDS_LIST = """
@@ -96,37 +95,35 @@ FIRECRAWL_SEARCH_PROMPT: Tuple[str, ...] = (
 
 @dataclass
 class SentimentAnalysisConfig:
-    """Configuration for sentiment analysis and topic analysis."""
+    """Configuration for sentiment analysis and FED decision analysis."""
     model_name: str = DEFAULT_MODEL_NAME
     firecrawl_mcp_server_url: str = DEFAULT_FIRECRAWL_URL
     max_concurrent_analysis: int = DEFAULT_MAX_CONCURRENT
     agent_retries: int = DEFAULT_AGENT_RETRIES
-    
+
     # Workflow control settings
-    topic_analysis_enabled: bool = DEFAULT_TOPIC_ANALYSIS_ENABLED
+    fed_analysis_enabled: bool = DEFAULT_FED_ANALYSIS_ENABLED
     token_detection_enabled: bool = DEFAULT_TOKEN_DETECTION_ENABLED
-    peace_talks_topic_enabled: bool = DEFAULT_PEACE_TALKS_TOPIC_ENABLED
 
 
 def get_sentiment_config() -> SentimentAnalysisConfig:
     """
     Get sentiment analyzer configuration from environment variables.
-    
+
     Returns:
         Configuration object with values from environment variables or defaults
     """
     def str_to_bool(value: str) -> bool:
         """Convert string environment variable to boolean."""
         return value.lower() in ('true', '1', 'yes', 'on')
-    
+
     return SentimentAnalysisConfig(
         model_name=os.getenv("SENTIMENT_MODEL_NAME", DEFAULT_MODEL_NAME),
         firecrawl_mcp_server_url=os.getenv("FIRECRAWL_MCP_SERVER_URL", DEFAULT_FIRECRAWL_URL),
         max_concurrent_analysis=int(os.getenv("MAX_CONCURRENT_ANALYSIS", str(DEFAULT_MAX_CONCURRENT))),
         agent_retries=int(os.getenv("AGENT_RETRIES", str(DEFAULT_AGENT_RETRIES))),
-        
+
         # Workflow control from environment variables
-        topic_analysis_enabled=str_to_bool(os.getenv("TOPIC_ANALYSIS_ENABLED", str(DEFAULT_TOPIC_ANALYSIS_ENABLED))),
-        token_detection_enabled=str_to_bool(os.getenv("TOKEN_DETECTION_ENABLED", str(DEFAULT_TOKEN_DETECTION_ENABLED))),
-        peace_talks_topic_enabled=str_to_bool(os.getenv("PEACE_TALKS_TOPIC_ENABLED", str(DEFAULT_PEACE_TALKS_TOPIC_ENABLED)))
+        fed_analysis_enabled=str_to_bool(os.getenv("FED_ANALYSIS_ENABLED", str(DEFAULT_FED_ANALYSIS_ENABLED))),
+        token_detection_enabled=str_to_bool(os.getenv("TOKEN_DETECTION_ENABLED", str(DEFAULT_TOKEN_DETECTION_ENABLED)))
     )

@@ -16,7 +16,7 @@ from pika.spec import Basic, BasicProperties
 
 from ..config.logging_config import get_logger
 from ..core.mq_subscriber import MQSubscriber
-from ..models.schemas import TokenDetails, SnipeAction, SnipeActionParams, TradeAction, AlignmentData, NotifyAction, NotifyActionParams
+from ..models.schemas import TokenDetails, SnipeAction, SnipeActionParams, TradeAction, FEDDecision, NotifyAction, NotifyActionParams
 from ..core.sentiment_analyzer import get_trade_action
 from .tweet import handle_tweet_event
 
@@ -107,9 +107,9 @@ def process_message_work(
             return
         
         try:
-            # Process tweet with topic-priority analysis - this may take time
+            # Process tweet with FED-priority analysis - this may take time
             logger.debug(
-                "Starting topic-priority analysis",
+                "Starting FED-priority analysis",
                 thread_id=thread_id,
                 delivery_tag=delivery_tag
             )
@@ -122,13 +122,14 @@ def process_message_work(
             
             processing_time = time.time() - start_time
             logger.info(
-                "Topic-priority analysis completed",
+                "FED-priority analysis completed",
                 thread_id=thread_id,
                 delivery_tag=delivery_tag,
                 processing_time_seconds=round(processing_time, 2),
                 has_sentiment_result=tweet_output.sentiment_analysis is not None,
-                has_alignment_data=analysis.has_topic_sentiment,
-                alignment_score=analysis.alignment_data.score if analysis.alignment_data else None
+                has_fed_decision=analysis.has_fed_decision,
+                fed_decision=analysis.fed_decision.decision if analysis.fed_decision else None,
+                basis_points=analysis.fed_decision.points if analysis.fed_decision else None
             )
             
             # Get actions queue name from environment
@@ -186,27 +187,28 @@ def process_message_work(
                         actions_queue=actions_queue
                     )
             
-            # Check for topic sentiment (alignment data result)
-            elif analysis.has_topic_sentiment and analysis.alignment_data is not None:
-                alignment_data = analysis.alignment_data
-                
+            # Check for FED decision result
+            elif analysis.has_fed_decision and analysis.fed_decision is not None:
+                fed_decision = analysis.fed_decision
+
                 logger.info(
-                    "Topic sentiment detected - preparing notify and trade actions",
+                    "FED decision detected - preparing notify and trade actions",
                     thread_id=thread_id,
                     delivery_tag=delivery_tag,
-                    alignment_score=alignment_data.score,
-                    explanation=alignment_data.explanation
+                    decision=fed_decision.decision,
+                    basis_points=fed_decision.points
                 )
-                
-                # Always create and publish notify action for topic-analyzed tweets
+
+                # Always create and publish notify action for FED-analyzed tweets
                 notify_params = NotifyActionParams(
                     source=tweet_output.data_source.author_name,
                     text=tweet_output.text,
                     createdAt=tweet_output.createdAt,
-                    alignment_score=alignment_data.score
+                    fed_decision=fed_decision.decision,
+                    basis_points=fed_decision.points
                 )
                 notify_action = NotifyAction(action="notify", params=notify_params)
-                
+
                 # Publish notify action to actions queue
                 try:
                     if mq_subscriber.publish(notify_action, queue_name=actions_queue):
@@ -215,7 +217,8 @@ def process_message_work(
                             thread_id=thread_id,
                             delivery_tag=delivery_tag,
                             source=tweet_output.data_source.author_name,
-                            alignment_score=alignment_data.score,
+                            fed_decision=fed_decision.decision,
+                            basis_points=fed_decision.points,
                             actions_queue=actions_queue
                         )
                     else:
@@ -224,7 +227,7 @@ def process_message_work(
                             thread_id=thread_id,
                             delivery_tag=delivery_tag,
                             source=tweet_output.data_source.author_name,
-                            alignment_score=alignment_data.score,
+                            fed_decision=fed_decision.decision,
                             actions_queue=actions_queue
                         )
                 except Exception as publish_error:
@@ -234,14 +237,14 @@ def process_message_work(
                         delivery_tag=delivery_tag,
                         error=str(publish_error),
                         source=tweet_output.data_source.author_name,
-                        alignment_score=alignment_data.score,
+                        fed_decision=fed_decision.decision,
                         actions_queue=actions_queue
                     )
-                
-                # Create trade action based on score (only if score >= 6)
-                trade_action = get_trade_action(alignment_data.score)
-                
-                # Only publish if trade action was created (score >= 6)
+
+                # Create trade action based on FED decision (only for rate cuts)
+                trade_action = get_trade_action(fed_decision)
+
+                # Only publish if trade action was created (rate cut detected)
                 if trade_action is not None:
                     # Publish trade action to actions queue
                     try:
@@ -250,7 +253,8 @@ def process_message_work(
                                 "Trade action published successfully",
                                 thread_id=thread_id,
                                 delivery_tag=delivery_tag,
-                                alignment_score=alignment_data.score,
+                                fed_decision=fed_decision.decision,
+                                basis_points=fed_decision.points,
                                 leverage=trade_action.params.leverage,
                                 margin_usd=trade_action.params.margin_usd,
                                 actions_queue=actions_queue
@@ -260,7 +264,8 @@ def process_message_work(
                                 "Failed to publish trade action",
                                 thread_id=thread_id,
                                 delivery_tag=delivery_tag,
-                                alignment_score=alignment_data.score,
+                                fed_decision=fed_decision.decision,
+                                basis_points=fed_decision.points,
                                 actions_queue=actions_queue
                             )
                     except Exception as publish_error:
@@ -269,15 +274,17 @@ def process_message_work(
                             thread_id=thread_id,
                             delivery_tag=delivery_tag,
                             error=str(publish_error),
-                            alignment_score=alignment_data.score,
+                            fed_decision=fed_decision.decision,
+                            basis_points=fed_decision.points,
                             actions_queue=actions_queue
                         )
                 else:
                     logger.debug(
-                        "No trade action created - score below threshold",
+                        "No trade action created - not a rate cut or invalid basis points",
                         thread_id=thread_id,
                         delivery_tag=delivery_tag,
-                        alignment_score=alignment_data.score
+                        fed_decision=fed_decision.decision,
+                        basis_points=fed_decision.points
                     )
             
             else:
