@@ -54,21 +54,17 @@ class FEDDecisionAgent:
         if not api_key:
             raise ValueError("OPENAI_API_KEY environment variable is required for FEDDecisionAgent")
 
-        # Configure DSPy with GPT-5 as specified in the FedDecision notebook
-        lm = dspy.LM(
+        # Create LM instance but don't configure globally to avoid async task conflicts
+        self.lm = dspy.LM(
             "openai/gpt-5",
             api_key=api_key,
             api_base=os.environ.get("OPENAI_BASE_URL"),
             temperature=1.0,
             max_tokens=16000
         )
-        dspy.configure(lm=lm)
 
         # Create the classifier - DSPy handles retries internally
         self.classifier = dspy.Predict(FOMCNewsClassifierSimple)
-
-        # Use asyncify to make the classifier async-capable
-        self.async_classifier = asyncify(self.classifier)
 
     async def run(self, text: str) -> FEDDecision:
         """
@@ -91,12 +87,14 @@ class FEDDecisionAgent:
         )
 
         try:
-            if span:
-                with span:
-                    # Use acall() for async execution - DSPy handles retries internally
-                    result = await self.async_classifier(tweet_text=text)
-            else:
-                result = await self.async_classifier(tweet_text=text)
+            # Use dspy.context() for local configuration in async task
+            with dspy.context(lm=self.lm):
+                if span:
+                    with span:
+                        # Use the classifier directly with context - no need for asyncify
+                        result = await self.classifier.acall(tweet_text=text)
+                else:
+                    result = await self.classifier.acall(tweet_text=text)
 
             execution_time = time.time() - start_time
             decision = result.decision
