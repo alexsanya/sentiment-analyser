@@ -4,6 +4,7 @@ import os
 import time
 from typing import Literal
 import dspy
+from dspy.utils.asyncify import asyncify
 
 from ...models.schemas import FEDDecision
 from ...config.logging_config import get_logger
@@ -47,7 +48,7 @@ class FEDDecisionAgent:
         Initialize the agent with GPT-5 model via DSPy
 
         Args:
-            agent_retries: Number of retry attempts for the agent
+            agent_retries: Number of retry attempts for the agent (DSPy handles retries internally)
         """
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
@@ -63,8 +64,11 @@ class FEDDecisionAgent:
         )
         dspy.configure(lm=lm)
 
+        # Create the classifier - DSPy handles retries internally
         self.classifier = dspy.Predict(FOMCNewsClassifierSimple)
-        self.agent_retries = agent_retries
+
+        # Use asyncify to make the classifier async-capable
+        self.async_classifier = asyncify(self.classifier)
 
     async def run(self, text: str) -> FEDDecision:
         """
@@ -86,72 +90,55 @@ class FEDDecisionAgent:
             agent_type="fed_decision"
         )
 
-        last_exception = None
+        try:
+            if span:
+                with span:
+                    # Use acall() for async execution - DSPy handles retries internally
+                    result = await self.async_classifier.acall(tweet_text=text)
+            else:
+                result = await self.async_classifier.acall(tweet_text=text)
 
-        for attempt in range(self.agent_retries):
-            try:
-                if span:
-                    with span:
-                        result = self.classifier(tweet_text=text)
-                else:
-                    result = self.classifier(tweet_text=text)
+            execution_time = time.time() - start_time
+            decision = result.decision
+            points = result.points
 
-                execution_time = time.time() - start_time
-                decision = result.decision
-                points = result.points
+            # Log metrics to Logfire
+            log_agent_metrics(
+                agent_type="fed_decision",
+                execution_time=execution_time,
+                input_size=text_length,
+                result_type=f"FEDDecision(decision={decision}, points={points})",
+                success=True,
+                text_preview=text[:100] + "..." if text_length > 100 else text
+            )
 
-                # Log metrics to Logfire
-                log_agent_metrics(
-                    agent_type="fed_decision",
-                    execution_time=execution_time,
-                    input_size=text_length,
-                    result_type=f"FEDDecision(decision={decision}, points={points})",
-                    success=True,
-                    text_preview=text[:100] + "..." if text_length > 100 else text
-                )
+            logger.debug(
+                "FEDDecisionAgent completed successfully",
+                text_length=text_length,
+                execution_time=execution_time,
+                decision=decision,
+                points=points
+            )
+            return FEDDecision(decision=decision, points=points)
 
-                logger.debug(
-                    "FEDDecisionAgent completed successfully",
-                    text_length=text_length,
-                    execution_time=execution_time,
-                    decision=decision,
-                    points=points,
-                    attempt=attempt + 1
-                )
-                return FEDDecision(decision=decision, points=points)
+        except Exception as e:
+            execution_time = time.time() - start_time
 
-            except Exception as e:
-                last_exception = e
-                logger.warning(
-                    "FEDDecisionAgent attempt failed",
-                    attempt=attempt + 1,
-                    max_attempts=self.agent_retries,
-                    error=str(e),
-                    text_length=text_length
-                )
+            # Log failed metrics to Logfire
+            log_agent_metrics(
+                agent_type="fed_decision",
+                execution_time=execution_time,
+                input_size=text_length,
+                result_type="FEDDecision(decision=None, points=None)",
+                success=False,
+                error=str(e)
+            )
 
-                if attempt == self.agent_retries - 1:
-                    # Last attempt failed
-                    execution_time = time.time() - start_time
-
-                    # Log failed metrics to Logfire
-                    log_agent_metrics(
-                        agent_type="fed_decision",
-                        execution_time=execution_time,
-                        input_size=text_length,
-                        result_type="FEDDecision(decision=None, points=None)",
-                        success=False,
-                        error=str(e)
-                    )
-
-                    logger.error(
-                        "FEDDecisionAgent failed after all retries",
-                        error=str(last_exception),
-                        text_length=text_length,
-                        execution_time=execution_time,
-                        max_attempts=self.agent_retries
-                    )
-                    break
-
-        # Return default "no decision" result on error
-        return FEDDecision(decision="None", points="None")
+            logger.error(
+                "FEDDecisionAgent failed",
+                error=str(e),
+                text_length=text_length,
+                execution_time=execution_time
+            )
+            # Return default "no decision" result on error
+            return FEDDecision(decision="None", points="None")
