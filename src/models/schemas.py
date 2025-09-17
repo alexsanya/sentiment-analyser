@@ -118,7 +118,7 @@ class AnalysisResult(BaseModel):
         return cls(sentiment_result=result, fed_decision=None)
 
     @classmethod
-    def fed_decision(cls, data: FEDDecision) -> 'AnalysisResult':
+    def from_fed_decision(cls, data: FEDDecision) -> 'AnalysisResult':
         """Create result with FED decision data."""
         return cls(sentiment_result=None, fed_decision=data)
 

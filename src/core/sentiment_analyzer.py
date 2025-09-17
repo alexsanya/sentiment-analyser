@@ -240,7 +240,7 @@ async def analyze_with_fed_priority(
             # If FED decision detected, return it
             if fed_result.decision != "None":
                 logger.info("FED decision detected - returning FED analysis result")
-                return AnalysisResult.fed_decision(fed_result)
+                return AnalysisResult.from_fed_decision(fed_result)
             else:
                 logger.debug("No FED decision detected - proceeding to token detection")
 
