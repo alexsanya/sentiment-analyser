@@ -94,9 +94,9 @@ class FEDDecisionAgent:
             if span:
                 with span:
                     # Use acall() for async execution - DSPy handles retries internally
-                    result = await self.async_classifier.acall(tweet_text=text)
+                    result = await self.async_classifier(tweet_text=text)
             else:
-                result = await self.async_classifier.acall(tweet_text=text)
+                result = await self.async_classifier(tweet_text=text)
 
             execution_time = time.time() - start_time
             decision = result.decision
@@ -123,6 +123,7 @@ class FEDDecisionAgent:
 
         except Exception as e:
             execution_time = time.time() - start_time
+            print(e)
 
             # Log failed metrics to Logfire
             log_agent_metrics(
